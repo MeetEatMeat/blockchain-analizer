@@ -7,6 +7,11 @@ import { UpdateBlockchainDto } from './dto/update-blockchain.dto';
 export class BlockchainController {
   constructor(private readonly blockchainService: BlockchainService) {}
 
+  @Get('affiliates/:address')
+  async findAffiliates(@Param('address') address: string) {
+    return await this.blockchainService.findAffiliates(address);
+  }
+
   @Get('data')
   async getBlockData(){
     return this.blockchainService.getData()

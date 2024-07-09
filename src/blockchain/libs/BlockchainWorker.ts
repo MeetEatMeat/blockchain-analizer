@@ -47,7 +47,7 @@ class BlockchainWorker {
                     apikey: this.apiKey
                 }
             });
-            console.log("getTransactions. response length: ", response.data.result);
+            // console.log("getTransactions. response length: ", response.data.result);
             const data = response.data;
             if (data.status === '1') {
                 return data.result;
@@ -73,19 +73,19 @@ class BlockchainWorker {
 
             if (txs.length < 10000) {
                 transactions = transactions.concat(txs);
-                console.log(`Fetched ${txs.length} transactions from blocks ${currentStartBlock} to ${currentEndBlock} Block range: ${range} Total transactions: ${transactions.length}`);
+                console.log(`Fetched ${txs.length} txs from block ${currentStartBlock} to ${currentEndBlock} | Range: ${range} | Total txs: ${transactions.length}`);
                 if (currentEndBlock === endblock) {
                     break;
                 }
                 currentStartBlock = currentEndBlock + 1;
                 currentEndBlock = currentStartBlock + range > endblock ? endblock : currentStartBlock + range;
-                if (txs.length < 3000) {
-                    console.log("\n======================= Increasing range =========================\n");
+                if (txs.length < 3000 && transactions.length) {
+                    // console.log(`\nReceived ${txs.length} transactions ==> Increasing range\n`);
                     range = range * 2;
                     currentEndBlock = currentStartBlock + range > endblock ? endblock : currentStartBlock + range;
                 }
             } else {
-                console.log("\n======================= Decreasing range =========================\n");
+                // console.log(`\nReceived ${txs.length} transactions ==> Decreasing range\n`);
                 currentEndBlock = currentStartBlock + Math.floor((currentEndBlock - currentStartBlock) / 2);
                 range = currentEndBlock - currentStartBlock;
             }
