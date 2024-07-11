@@ -8,52 +8,60 @@ import { BlockchainWorker } from './libs/blockchainWorker';
 
 @Injectable()
 export class BlockchainService {
-  private DATA = [{
-    timestamp: 1632800000000,
-    hash: ""
-  }];
+  private worker: BlockchainWorker;
 
-  constructor(private prisma: PrismaService) {}
-
-  create(dto: BlockchainDto) {
-    this.DATA.push({
-      timestamp: dto.timestamp,
-      hash: dto.hash
-    });
-    return this.DATA;
+  constructor(private prisma: PrismaService) {
+    this.worker = new BlockchainWorker(process.env.ETH_API_KEY || '');
   }
 
-  getData() {
-    return this.DATA;
+  updateWorker(apiKey: string) {
+    this.worker = new BlockchainWorker(apiKey);
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} blockchain`;
+  async addNewAddress(address: string): Promise<string> {
+    const transactions = await this.updateDatabase(address, this.worker);
+    return `Found and saved ${transactions.length} transactions for address: ${address}`;
   }
 
-  update(timestamp: string, dto: UpdateBlockchainDto) {
-    const transaction = this.DATA.find((data) => data.timestamp === +timestamp);
-    if (!transaction) {
-      throw new NotFoundException(`Transaction with timestamp ${timestamp} not found`);
+  async findAffiliates(address: string, range: number): Promise<string> {
+    try {
+      const allTransactions = await this.lookIntoDataBase(address);
+      return checkAffiliates(allTransactions, range);
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+      throw error;
     }
-    transaction.hash = dto.hash;
-    return transaction;
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} blockchain`;
-  }
+  async updateDatabase(address: string, worker: BlockchainWorker): Promise<Transaction[]> {
+    // Find the latest block in the database
+    const latestBlockInDb = await this.prisma.transaction.findFirst({
+      where: {
+        OR: [
+          { from: address },
+          { to: address }
+        ]
+      },
+      orderBy: {
+        blockNumber: 'desc'
+      },
+      select: {
+        blockNumber: true
+      }
+    });
 
-  async findAffiliates(address: string) {
-    const worker = new BlockchainWorker(process.env.ETH_API_KEY || '');
-    const network = 'https://api.etherscan.io/api';
+    const startBlock = latestBlockInDb ? parseInt(latestBlockInDb.blockNumber) + 1 : 0;
+    console.log(`Starting block: ${startBlock}`);
 
-    const latestBlock = await worker.getLatestBlock(network);
+    // Find the latest block on the network
+    const latestBlock = await worker.getLatestBlock();
     console.log(`Latest block: ${latestBlock}`);
 
-    const transactions = await worker.fetchAllTransactions(address, network, 0, latestBlock, 1, 10000, 'asc');
+    // Fetch all transactions from the network for the given address
+    const transactions = await worker.fetchAllTransactions(address, worker.getNetwork(), startBlock, latestBlock, 1, 10000, 'asc');
     console.log(`Fetched ${transactions.length} transactions`);
 
+    // Save all transactions to the database
     for (const tx of transactions) {
       try {
         await this.prisma.transaction.create({
@@ -86,22 +94,32 @@ export class BlockchainService {
         }
       }
     }
+    console.log(`Found and saved ${transactions.length} transactions to database`);
+    return transactions;
+  }
 
-    console.log('Transactions saved to PostgreSQL database using Prisma');
-
-    const savedTransactions = await this.prisma.transaction.findMany({
-      where: {
-        OR: [
-          { from: address },
-          { to: address }
-        ]
+  async lookIntoDataBase(address: string): Promise<Transaction[]>{
+    const chunkSize = 100000;
+    const txs: any[] = [];
+  
+    while (true) {
+      const chunk = await this.prisma.transaction.findMany({
+        where: {
+          to: address
+        },
+        skip: txs.length,
+        take: chunkSize,
+      });
+      // console.log("ChunkItems: ", chunk);
+  
+      txs.push(...chunk);
+      console.log(`Fetched ${txs.length} transactions from database`);
+  
+      if (chunk.length === 0) {
+        break;
       }
-    });
-
-    console.log('Saved transactions from database:', savedTransactions);
-
-    // checkAffiliates(address);
-
-    return `Found and saved ${transactions.length} transactions.`;
+    }
+  
+    return txs;
   }
 }

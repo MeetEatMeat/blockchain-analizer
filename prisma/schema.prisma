@@ -35,10 +35,9 @@ model Transaction {
 }
 
 model TokenTransfer {
-  id                 Int    @id @default(autoincrement())
+  hash               String @id
   blockNumber        String
   timeStamp          String
-  hash               String
   nonce              String
   blockHash          String
   from               String

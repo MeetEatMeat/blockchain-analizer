@@ -3,15 +3,21 @@ import { Transaction } from '../dto/transaction.dto';
 
 class BlockchainWorker {
     private apiKey: string;
+    private network: string;
 
-    constructor(apiKey: string) {
+    constructor(apiKey: string, network: string = 'https://api.etherscan.io/api') {
         this.apiKey = apiKey;
+        this.network = network;
     }
 
-    async getLatestBlock(network: string): Promise<number> {
+    getNetwork(): string {
+        return this.network;
+    }
+
+    async getLatestBlock(): Promise<number> {
         console.log('Fetching latest block...\n');
         try {
-            const response = await axios.get(network, {
+            const response = await axios.get(this.network, {
                 params: {
                     module: 'proxy',
                     action: 'eth_blockNumber',
@@ -32,9 +38,9 @@ class BlockchainWorker {
         }
     }
 
-    async getTransactions(address: string, network: string, startblock: number, endblock: number, page: number, offset: number, sort: string): Promise<Transaction[]> {
+    async getTransactions(address: string, startblock: number, endblock: number, page: number, offset: number, sort: string): Promise<Transaction[]> {
         try {
-            const response = await axios.get(network, {
+            const response = await axios.get(this.network, {
                 params: {
                     module: 'account',
                     action: 'txlist',
@@ -52,11 +58,11 @@ class BlockchainWorker {
             if (data.status === '1') {
                 return data.result;
             } else {
-                console.error('Error fetching transactions:', data.message);
+                console.error('Unsuccess fetching transactions:', data.message);
                 return [];
             }
         } catch (error) {
-            console.error('Error fetching transactions:', error);
+            console.error('Error fetching transactions:', error.message);
             return [];
         }
     }
@@ -69,7 +75,7 @@ class BlockchainWorker {
 
         console.log("Fetching all transactions...\n");
         while (currentStartBlock < endblock) {
-            const txs = await this.getTransactions(address, network, currentStartBlock, currentEndBlock, page, offset, sort);
+            const txs = await this.getTransactions(address, currentStartBlock, currentEndBlock, page, offset, sort);
 
             if (txs.length < 10000) {
                 transactions = transactions.concat(txs);
