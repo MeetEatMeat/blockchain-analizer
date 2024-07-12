@@ -12,8 +12,24 @@ export class BlockchainController {
     return await this.blockchainService.findAffiliates(address, range);
   }
 
-  @Post('database/:address')
+  @Post('transactions/all-in-out/:address')
   async addNewAddress(@Param('address') address: string) {
-    return await this.blockchainService.addNewAddress(address);
+    return await this.blockchainService.uploadAddressTransactions(address);
   }
+
+  @Post('erc20transfers/from-address/:address')
+  async findERC20TransfersFromAddress(@Param('contractaddress') contractaddress: string, @Param('address') address: string) {
+    return await this.blockchainService.findERC20TransfersFromAddress(address);
+  }
+
+  @Post('erc20transfers/from-contract/:contractaddress')
+  async findERC20TransfersFromContract(@Param('contractaddress') contractaddress: string) {
+    return await this.blockchainService.findERC20TransfersFromContract(contractaddress);
+  }
+
+  @Post('erc20transfers/token-from-address/:tokenaddress/:address')
+  async findTokenTransfersFromAddress(@Param('tokenaddress') tokenaddress: string, @Param('address') address: string) {
+    return await this.blockchainService.findTokenTransfersFromAddress(tokenaddress, address);
+  }
+
 }

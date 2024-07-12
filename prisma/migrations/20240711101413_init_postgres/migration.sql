@@ -1,6 +1,6 @@
 -- CreateTable
 CREATE TABLE "Transaction" (
-    "hash" TEXT NOT NULL PRIMARY KEY,
+    "hash" TEXT NOT NULL,
     "blockNumber" TEXT NOT NULL,
     "timeStamp" TEXT NOT NULL,
     "nonce" TEXT NOT NULL,
@@ -17,15 +17,16 @@ CREATE TABLE "Transaction" (
     "contractAddress" TEXT NOT NULL,
     "cumulativeGasUsed" TEXT NOT NULL,
     "gasUsed" TEXT NOT NULL,
-    "confirmations" TEXT NOT NULL
+    "confirmations" TEXT NOT NULL,
+
+    CONSTRAINT "Transaction_pkey" PRIMARY KEY ("hash")
 );
 
 -- CreateTable
 CREATE TABLE "TokenTransfer" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "hash" TEXT NOT NULL,
     "blockNumber" TEXT NOT NULL,
     "timeStamp" TEXT NOT NULL,
-    "hash" TEXT NOT NULL,
     "nonce" TEXT NOT NULL,
     "blockHash" TEXT NOT NULL,
     "from" TEXT NOT NULL,
@@ -41,5 +42,7 @@ CREATE TABLE "TokenTransfer" (
     "gasUsed" TEXT NOT NULL,
     "cumulativeGasUsed" TEXT NOT NULL,
     "input" TEXT NOT NULL,
-    "confirmations" TEXT NOT NULL
+    "confirmations" TEXT NOT NULL,
+
+    CONSTRAINT "TokenTransfer_pkey" PRIMARY KEY ("hash")
 );

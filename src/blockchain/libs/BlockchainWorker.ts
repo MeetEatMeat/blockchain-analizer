@@ -1,28 +1,27 @@
 import axios from 'axios';
 import { Transaction } from '../dto/transaction.dto';
+import { TokenTransfer } from '../dto/token-transfer.dto';
 
 class BlockchainWorker {
     private apiKey: string;
-    private network: string;
 
-    constructor(apiKey: string, network: string = 'https://api.etherscan.io/api') {
+    constructor(apiKey: string) {
         this.apiKey = apiKey;
-        this.network = network;
     }
 
     getNetwork(): string {
-        return this.network;
+        return 'https://api.etherscan.io/api';
     }
 
     async getLatestBlock(): Promise<number> {
         console.log('Fetching latest block...\n');
         try {
-            const response = await axios.get(this.network, {
-                params: {
-                    module: 'proxy',
-                    action: 'eth_blockNumber',
-                    apikey: this.apiKey
-                }
+            const response = await axios.get(this.getNetwork(), {
+            params: {
+                module: 'proxy',
+                action: 'eth_blockNumber',
+                apikey: this.apiKey
+            }
             });
 
             const data = response.data;
@@ -40,7 +39,7 @@ class BlockchainWorker {
 
     async getTransactions(address: string, startblock: number, endblock: number, page: number, offset: number, sort: string): Promise<Transaction[]> {
         try {
-            const response = await axios.get(this.network, {
+            const response = await axios.get(this.getNetwork(), {
                 params: {
                     module: 'account',
                     action: 'txlist',
@@ -53,21 +52,21 @@ class BlockchainWorker {
                     apikey: this.apiKey
                 }
             });
-            // console.log("getTransactions. response length: ", response.data.result);
+
             const data = response.data;
             if (data.status === '1') {
                 return data.result;
             } else {
-                console.error('Unsuccess fetching transactions:', data.message);
+                console.error('Error fetching transactions:', data.message);
                 return [];
             }
         } catch (error) {
-            console.error('Error fetching transactions:', error.message);
+            console.error('Error fetching transactions:', error);
             return [];
         }
     }
 
-    async fetchAllTransactions(address: string, network: string, startblock: number, endblock: number, page: number, offset: number, sort: string): Promise<Transaction[]> {
+    async fetchAllTransactions(address: string, startblock: number, endblock: number, page: number, offset: number, sort: string): Promise<Transaction[]> {
         let transactions: Transaction[] = [];
         let currentStartBlock = startblock;
         let currentEndBlock = endblock;
@@ -79,19 +78,19 @@ class BlockchainWorker {
 
             if (txs.length < 10000) {
                 transactions = transactions.concat(txs);
-                console.log(`Fetched ${txs.length} txs from block ${currentStartBlock} to ${currentEndBlock} | Range: ${range} | Total txs: ${transactions.length}`);
+                console.log(`Fetched ${txs.length} transactions from blocks ${currentStartBlock} to ${currentEndBlock} Block range: ${range} Total transactions: ${transactions.length}`);
                 if (currentEndBlock === endblock) {
                     break;
                 }
                 currentStartBlock = currentEndBlock + 1;
                 currentEndBlock = currentStartBlock + range > endblock ? endblock : currentStartBlock + range;
-                if (txs.length < 3000 && transactions.length) {
-                    // console.log(`\nReceived ${txs.length} transactions ==> Increasing range\n`);
+                if (txs.length < 3000) {
+                    console.log("\n======================= Increasing range =========================\n");
                     range = range * 2;
                     currentEndBlock = currentStartBlock + range > endblock ? endblock : currentStartBlock + range;
                 }
             } else {
-                // console.log(`\nReceived ${txs.length} transactions ==> Decreasing range\n`);
+                console.log("\n======================= Decreasing range =========================\n");
                 currentEndBlock = currentStartBlock + Math.floor((currentEndBlock - currentStartBlock) / 2);
                 range = currentEndBlock - currentStartBlock;
             }
@@ -99,6 +98,125 @@ class BlockchainWorker {
 
         return transactions;
     }
+
+    async getTokenTransfers(contractaddress: string, address: string, startblock: number, endblock: number, page: number, offset: number, sort: string): Promise<TokenTransfer[]> {
+        try {
+            let response;
+            if(contractaddress && address){
+                response = await axios.get(this.getNetwork(), {
+                    params: {
+                        module: 'account',
+                        action: 'tokentx',
+                        contractaddress,
+                        address,
+                        startblock,
+                        endblock,
+                        page,
+                        offset,
+                        sort,
+                        apikey: this.apiKey
+                    }
+                });
+            } else if (address){
+                response = await axios.get(this.getNetwork(), {
+                    params: {
+                        module: 'account',
+                        action: 'tokentx',
+                        address,
+                        startblock,
+                        endblock,
+                        page,
+                        offset,
+                        sort,
+                        apikey: this.apiKey
+                    }
+                });
+            } else {
+                response = await axios.get(this.getNetwork(), {
+                    params: {
+                        module: 'account',
+                        action: 'tokentx',
+                        contractaddress,
+                        startblock,
+                        endblock,
+                        page,
+                        offset,
+                        sort,
+                        apikey: this.apiKey
+                    }
+                });
+            }
+
+            const data = response.data;
+            if (data.status === '1') {
+                return data.result.map((item: any) => this.mapToTokenTransfer(item));
+            } else {
+                console.error('Error fetching token transfers 1:', data);
+                return [];
+            }
+        } catch (error) {
+            console.error('Error fetching token transfers 2:', error);
+            return [];
+        }
+    }
+
+    async fetchAllTokenTransfers(contractaddress: string, address: string, startblock: number, endblock: number, page: number, offset: number, sort: string): Promise<TokenTransfer[]> {
+        let tokenTransfers: TokenTransfer[] = [];
+        let currentStartBlock = startblock;
+        let currentEndBlock = endblock;
+        let range = 0;
+        console.log("Start block: ", startblock);
+        console.log("End block: ", endblock);
+
+        while (currentStartBlock < endblock) {
+            const txs = await this.getTokenTransfers(contractaddress, address, currentStartBlock, currentEndBlock, page, offset, sort);
+
+            if (txs.length < 10000) {
+                tokenTransfers = tokenTransfers.concat(txs);
+                console.log(`Fetched ${txs.length} transactions from blocks ${currentStartBlock} to ${currentEndBlock} Block range: ${range} Total transactions: ${tokenTransfers.length}`);
+                if (currentEndBlock === endblock) {
+                    break;
+                }
+                currentStartBlock = currentEndBlock + 1;
+                currentEndBlock = currentStartBlock + range > endblock ? endblock : currentStartBlock + range;
+                if (txs.length < 3000) {
+                    console.log("\n======================= Increasing range =========================\n");
+                    range = range * 2;
+                    currentEndBlock = currentStartBlock + range > endblock ? endblock : currentStartBlock + range;
+                }
+            } else {
+                console.log("\n======================= Decreasing range =========================\n");
+                currentEndBlock = currentStartBlock + Math.floor((currentEndBlock - currentStartBlock) / 2);
+                range = currentEndBlock - currentStartBlock;
+            }
+        }
+
+        return tokenTransfers;
+    }
+
+    private mapToTokenTransfer(item: any): TokenTransfer {
+        return {
+            hash: item.hash,
+            blockNumber: item.blockNumber,
+            timeStamp: item.timeStamp,
+            nonce: item.nonce,
+            blockHash: item.blockHash,
+            from: item.from,
+            contractAddress: item.contractAddress,
+            to: item.to,
+            value: item.value,
+            tokenName: item.tokenName,
+            tokenSymbol: item.tokenSymbol,
+            tokenDecimal: item.tokenDecimal,
+            transactionIndex: item.transactionIndex,
+            gas: item.gas,
+            gasPrice: item.gasPrice,
+            gasUsed: item.gasUsed,
+            cumulativeGasUsed: item.cumulativeGasUsed,
+            input: item.input,
+            confirmations: item.confirmations,
+        };
+    }
 }
 
-export { BlockchainWorker, Transaction };
+export { BlockchainWorker, Transaction, TokenTransfer };
