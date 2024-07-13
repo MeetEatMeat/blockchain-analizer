@@ -3,8 +3,9 @@ import { BlockchainDto } from './dto/create-blockchain.dto';
 import { UpdateBlockchainDto } from './dto/update-blockchain.dto';
 import { PrismaService } from '../prisma.service';
 import { Transaction, TokenTransfer, Prisma } from '@prisma/client';
-import checkAffiliates from './libs/analize';
+import checkAffiliates from './libs/analisys';
 import { BlockchainWorker } from './libs/blockchainWorker';
+import { error } from 'console';
 
 @Injectable()
 export class BlockchainService {
@@ -38,8 +39,29 @@ export class BlockchainService {
   // TRANSACTIONS
   ///////////////////////////////////////////////////////////////////////////////////////
 
+  async deleteAllTransactions(): Promise<void> {
+    try {
+      const deleteResult = await this.prisma.transaction.deleteMany({});
+      console.log(`Deleted ${deleteResult.count} transactions from the database`);
+    } catch (error) {
+      console.error('Error deleting transactions:', error);
+      throw error;
+    }
+  }
+
+  async getTransactionsCount(): Promise<number> {
+    try {
+      const count = await this.prisma.transaction.count();
+      console.log(`Transactions count: ${count}`);
+      return count;
+    } catch (error) {
+      console.error('Error fetching transactions count:', error);
+      throw error;
+    }
+  }
+
   async updateTransactions(address: string): Promise<Transaction[]> {
-    const startBlock = await this.getLatestBlockInDb(address);
+    const startBlock = await this.transactionsGetLatestBlockInDB(address);
     const latestBlock = await this.worker.getLatestBlock();
 
     const transactions = await this.worker.fetchAllTransactions(address, startBlock, latestBlock, 1, 10000, 'asc');
@@ -48,23 +70,32 @@ export class BlockchainService {
     return transactions;
   }
 
-  async getLatestBlockInDb(address: string): Promise<number> {
-    const latestBlockInDb = await this.prisma.transaction.findFirst({
-      where: {
-        OR: [
-          { from: address },
-          { to: address }
-        ]
-      },
-      orderBy: {
-        blockNumber: 'desc'
-      },
-      select: {
-        blockNumber: true
-      }
-    });
-  
-    return latestBlockInDb ? parseInt(latestBlockInDb.blockNumber) + 1 : 0;
+  async transactionsGetLatestBlockInDB(address: string): Promise<number> {
+    const transactionsCount = await this.prisma.transaction.count();
+    if (transactionsCount === 0) {
+      return 0;
+    }
+    let result;
+    if (address) {
+      result = await this.prisma.transaction.findFirst({
+        where: {
+          OR: [
+            { from: address },
+            { to: address }
+          ]
+        },
+        orderBy: {
+          blockNumber: 'desc'
+        },
+        select: {
+          blockNumber: true
+        }
+      });
+    } else {
+      throw new NotFoundException('BlockchainService.transactionsGetLatestBlockInDB(): Invalid parameters');
+    }
+    console.log('Latest block of transactions in db:', result);
+    return parseInt(result.blockNumber);
   }
 
   async saveToTransactions(transactions: Transaction[]): Promise<void> {
@@ -130,8 +161,35 @@ export class BlockchainService {
   // TOKEN TRANSFERS
   ///////////////////////////////////////////////////////////////////////////////////////
 
+  async deleteAllTokenTransfers(): Promise<void> {
+    try {
+      const deleteResult = await this.prisma.tokenTransfer.deleteMany({});
+      console.log(`Deleted ${deleteResult.count} token transfers from the database`);
+    } catch (error) {
+      console.error('Error deleting token transfers:', error);
+      throw error;
+    }
+  }
+
+  async getTokenTransferCount(): Promise<number> {
+    try {
+      const count = await this.prisma.tokenTransfer.count();
+      console.log(`Token transfer count: ${count}`);
+      return count;
+    } catch (error) {
+      console.error('Error fetching token transfer count:', error);
+      throw error;
+    }
+  }
+
+  async checkTokenTransferRelations(address: string, target: string): Promise<TokenTransfer[]> {
+    // Find all token transfers affiliated with the address
+    const allTransfers = await this.updateTokenTransfers('', address, false);
+    return allTransfers.filter(tx => tx.to === target || tx.from === target);
+  }
+  
   async findERC20TransfersFromAddress(address: string): Promise<TokenTransfer[]> {
-    this.updateTokenTransfers('', address);
+    await this.updateTokenTransfers('', address, true);
     try {
       return await this.lookForAnyTokenTransfers(address);
     } catch (error) {
@@ -141,7 +199,7 @@ export class BlockchainService {
   }
 
   async findERC20TransfersFromContract(contractaddress: string): Promise<TokenTransfer[]> {
-    this.updateTokenTransfers(contractaddress, '');
+    await this.updateTokenTransfers(contractaddress, '', true);
     try {
       return await this.lookForAnyTokenTransfers(contractaddress);
     } catch (error) {
@@ -151,7 +209,7 @@ export class BlockchainService {
   }
 
   async findTokenTransfersFromAddress(contractaddress: string, address: string): Promise<TokenTransfer[]> {
-    this.updateTokenTransfers(contractaddress, address);
+    await this.updateTokenTransfers(contractaddress, address, true);
     try {
       return await this.lookForExactTokenTransfers(contractaddress, address);
     } catch (error) {
@@ -160,18 +218,30 @@ export class BlockchainService {
     }
   }
 
-  async updateTokenTransfers(contractaddress: string, address: string): Promise<TokenTransfer[]> {
-    const latestBlockInDb = await this.tokenTransferGetLatestBlock(contractaddress, address);
-    const startBlock = latestBlockInDb ? parseInt(latestBlockInDb.blockNumber) + 1 : 0;
+  // If contractAddress (token) is placed only, it will fetch all token transfers of that token. 
+  // To and From are arbitrary
+  // If address is placed only, it will fetch all token transfers from that address OR to
+  // that address. ContractAddress (token) is arbitrary
+  // If both contractAddress and address are placed, it will fetch all transfers of that token 
+  // from that address OR to that address.
+  async updateTokenTransfers(contractaddress: string, address: string, store: boolean): Promise<TokenTransfer[]> {
+    // const startBlock = await this.getLatestTokenTransferInDB(contractaddress, address);
+    const startBlock = 0;
+    console.log('updateTokenTransfers.Start block:', startBlock);
     const latestBlock = await this.worker.getLatestBlock();
 
     const tokenTransfers = await this.worker.fetchAllTokenTransfers(contractaddress, address, startBlock, latestBlock, 1, 10000, 'asc');
-
-    await this.saveToTokenTransfers(tokenTransfers);
+    if (store){
+      await this.saveToTokenTransfers(tokenTransfers);
+    }
     return tokenTransfers;
   }
 
-  async tokenTransferGetLatestBlock(contractAddress: string, address: string): Promise<TokenTransfer> {
+  async getLatestTokenTransferInDB(contractAddress: string, address: string): Promise<number> {
+    const tokenTransfersCount = await this.prisma.tokenTransfer.count();
+    if (tokenTransfersCount === 0) {
+      return 0;
+    }
     let result;
     if (contractAddress && address) {
       result = await this.prisma.tokenTransfer.findFirst({
@@ -186,6 +256,7 @@ export class BlockchainService {
           blockNumber: true
         }
       });
+      console.log('Latest block in db Case 1', result);
     } else if (contractAddress) {
       result = await this.prisma.tokenTransfer.findFirst({
         where: {
@@ -198,20 +269,25 @@ export class BlockchainService {
           blockNumber: true
         }
       });
-    } else {
+      console.log('Latest block in db Case 2', result);
+    } else if (address) {
       result = await this.prisma.tokenTransfer.findFirst({
         where: {
             from: address
         },
         orderBy: {
           blockNumber: 'desc'
-        },
-        select: {
-          blockNumber: true
         }
+        // select: {
+        //   blockNumber: true
+        // }
       });
+      console.log('Latest block in db Case 3', result);
+    } else {
+      throw new NotFoundException('BlockchainService.tokenTransferGetLatestBlockInDB(): Invalid parameters');
     }
-    return result;
+    console.log('Latest block of token transfers in db: ', result);
+    return parseInt(result.blockNumber);
   }
 
   async saveToTokenTransfers(tokenTransfers: TokenTransfer[]): Promise<void> {
@@ -242,7 +318,7 @@ export class BlockchainService {
         });
       } catch (error) {
         if (error.code === 'P2002') {
-          console.log(`Duplicate token transfer found: ${tx.hash}`);
+          // console.log(`Duplicate token transfer found: ${tx.hash}`);
         } else {
           throw error;
         }

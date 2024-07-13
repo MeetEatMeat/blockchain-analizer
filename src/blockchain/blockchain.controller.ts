@@ -1,33 +1,41 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UsePipes, ValidationPipe } from '@nestjs/common';
 import { BlockchainService } from './blockchain.service';
-import { BlockchainDto } from './dto/create-blockchain.dto';
-import { UpdateBlockchainDto } from './dto/update-blockchain.dto';
 
 @Controller('blockchain')
 export class BlockchainController {
   constructor(private readonly blockchainService: BlockchainService) {}
 
-  @Get('affiliates/:address/:range')
+  @Get('analisys/affiliates/:address/:range')
   async findAffiliates(@Param('address') address: string, @Param('range') range: number){
     return await this.blockchainService.findAffiliates(address, range);
   }
 
-  @Post('transactions/all-in-out/:address')
-  async addNewAddress(@Param('address') address: string) {
-    return await this.blockchainService.uploadAddressTransactions(address);
+  @Get('analisys/transactions/count')
+  async getTransactionCount() {
+    return await this.blockchainService.getTransactionsCount();
   }
 
-  @Post('erc20transfers/from-address/:address')
-  async findERC20TransfersFromAddress(@Param('contractaddress') contractaddress: string, @Param('address') address: string) {
+  @Get('analisys/token-transfers/count')
+  async getTokenTransferCount() {
+    return await this.blockchainService.getTokenTransferCount();
+  }
+
+  @Get('token-transfers/relations/:address/:target')
+  async checkTokenTransferRelations(@Param('address') address: string, @Param('target') target: string) {
+    return await this.blockchainService.checkTokenTransferRelations(address, target);
+  }
+
+  @Get('token-transfers/from-address/list/:address')
+  async findERC20TransfersFromAddress(@Param('address') address: string) {
     return await this.blockchainService.findERC20TransfersFromAddress(address);
   }
 
-  @Post('erc20transfers/from-contract/:contractaddress')
+  @Get('token-transfers/from-contract/list/:contractaddress')
   async findERC20TransfersFromContract(@Param('contractaddress') contractaddress: string) {
     return await this.blockchainService.findERC20TransfersFromContract(contractaddress);
   }
 
-  @Post('erc20transfers/token-from-address/:tokenaddress/:address')
+  @Get('token-transfers/token-from-address/list/:tokenaddress/:address')
   async findTokenTransfersFromAddress(@Param('tokenaddress') tokenaddress: string, @Param('address') address: string) {
     return await this.blockchainService.findTokenTransfersFromAddress(tokenaddress, address);
   }

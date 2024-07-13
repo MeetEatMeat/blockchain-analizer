@@ -107,8 +107,8 @@ class BlockchainWorker {
                     params: {
                         module: 'account',
                         action: 'tokentx',
-                        contractaddress,
-                        address,
+                        contractaddress: contractaddress,
+                        address: address,
                         startblock,
                         endblock,
                         page,
@@ -122,7 +122,7 @@ class BlockchainWorker {
                     params: {
                         module: 'account',
                         action: 'tokentx',
-                        address,
+                        address: address,
                         startblock,
                         endblock,
                         page,
@@ -136,7 +136,7 @@ class BlockchainWorker {
                     params: {
                         module: 'account',
                         action: 'tokentx',
-                        contractaddress,
+                        contractaddress: contractaddress,
                         startblock,
                         endblock,
                         page,
@@ -170,9 +170,9 @@ class BlockchainWorker {
 
         while (currentStartBlock < endblock) {
             const txs = await this.getTokenTransfers(contractaddress, address, currentStartBlock, currentEndBlock, page, offset, sort);
-
             if (txs.length < 10000) {
                 tokenTransfers = tokenTransfers.concat(txs);
+                console.log("Fetched transactions: ", txs);
                 console.log(`Fetched ${txs.length} transactions from blocks ${currentStartBlock} to ${currentEndBlock} Block range: ${range} Total transactions: ${tokenTransfers.length}`);
                 if (currentEndBlock === endblock) {
                     break;

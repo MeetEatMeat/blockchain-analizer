@@ -1,9 +1,9 @@
-import checkAffiliates from './analize';
+import checkAffiliates from '../src/blockchain/libs/analisys';
 import axios from 'axios';
 import { Test, TestingModule } from '@nestjs/testing';
-import { BlockchainService } from '../blockchain.service';
-import { PrismaService } from '../../prisma.service';
-import { BlockchainWorker } from './blockchainWorker';
+import { BlockchainService } from '../src/blockchain/blockchain.service';
+import { PrismaService } from '../src/prisma.service';
+import { BlockchainWorker } from '../src/blockchain/libs/blockchainWorker';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -14,14 +14,14 @@ async function main() {
     }).compile();
 
     const blockchainService = module.get<BlockchainService>(BlockchainService);
-    const prismaService = module.get<PrismaService>(PrismaService);
+    // const prismaService = module.get<PrismaService>(PrismaService);
 
-    const worker: BlockchainWorker = new BlockchainWorker(process.env.ETH_API_KEY || '');
-    const latestBlock = await worker.getLatestBlock();
-    console.log("Latest block: ", latestBlock);
+    // const worker: BlockchainWorker = new BlockchainWorker(process.env.ETH_API_KEY || '');
+    // const latestBlock = await worker.getLatestBlock();
+    // console.log("Latest block: ", latestBlock);
 
-    const contractaddress = '0xa1d0E215a23d7030842FC67cE582a6aFa3CCaB83';
-    const address = '0x7A57eaA048Dc74349743512B7Da762f7667A9108';
+    // const contractaddress = '0xa1d0E215a23d7030842FC67cE582a6aFa3CCaB83';
+    // const address = '0x7A57eaA048Dc74349743512B7Da762f7667A9108';
 
     // const result = await blockchainService.findAffiliates(address, 10);
     // const result = await blockchainService.addNewAddress(address);
@@ -38,8 +38,10 @@ async function main() {
     // const result = await worker.fetchAllTokenTransfers('', address, 0, latestBlock, 1, 10000, 'asc');
     // const result = await worker.fetchAllTokenTransfers(contractaddress, '', 0, latestBlock, 1, 10000, 'asc');
 
-
-    console.log("Transfers found: " , result.length);
+    const counBefore = await blockchainService.getTokenTransferCount();
+    await blockchainService.deleteAllTokenTransfers();
+    const countAfter = await blockchainService.getTokenTransferCount();
+    console.log(`Number of token transfers before: ${counBefore} Number of token transfers after: ${countAfter}`);
 
     // await prismaService.$disconnect();
 }
