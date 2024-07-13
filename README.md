@@ -1,73 +1,84 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="200" alt="Nest Logo" /></a>
-</p>
+# Blockchain Analyzer
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Blockchain Analyzer is a NestJS-based application for analyzing blockchain transactions and token transfers. It uses Prisma as ORM and supports PostgreSQL for storing data.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Features
 
-## Description
+- Fetch and store blockchain transactions for a specific address.
+- Fetch and store token transfers for a specific address or contract address.
+- Analyze affiliated addresses based on transactions.
+- Check token transfer relations between addresses.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Prerequisites
+
+Before you begin, ensure you have met the following requirements:
+
+- Node.js (>= 14.x)
+- PostgreSQL database
+- Yarn or npm
 
 ## Installation
 
-```bash
-$ yarn install
-```
-
-## Running the app
+1. Clone the repository:
 
 ```bash
-# development
-$ yarn run start
+git clone https://github.com/yourusername/blockchain-analyzer.git
+cd blockchain-analyzer
+````
 
-# watch mode
-$ yarn run start:dev
-
-# production mode
-$ yarn run start:prod
-```
-
-## Test
+2. Install dependencies:
 
 ```bash
-# unit tests
-$ yarn run test
-
-# e2e tests
-$ yarn run test:e2e
-
-# test coverage
-$ yarn run test:cov
+yarn install
+# or
+npm install
+````
+3. Set up your environment variables by creating a .env file in the root directory with the following content:
 ```
+DATABASE_URL="postgresql://<username>:<password>@<host>:<port>/<database>?schema=public"
+ETH_API_KEY="<your_etherscan_api_key>"
+````
+4. Migrate your database:
+```bash
+npx prisma migrate dev --name init
+````
+5. Generate Prisma client:
+```bash
+npx prisma generate
+````
+## Running the Application
+To start the application, run:
+```bash
+yarn start
+# or
+npm start
+````
+The application will be available at http://localhost:3000.
 
-## Support
+## Endpoints
+### Fetch and Store Data
+Fetch and store all transactions for a specific address.
+* `POST /blockchain/transactions/all-in-out/:address`
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+Fetch and store all token transfers for a specific address.
+* `GET /blockchain/token-transfers/from-address/list/:address`
 
-## Stay in touch
+Fetch and store all token transfers for a specific contract address.
+* `GET /blockchain/token-transfers/from-contract/list/:contractaddress`
 
-- Author - [Kamil Myśliwiec](https://kamilmysliwiec.com)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+Fetch and store all token transfers for a specific token and address.
+* `GET /blockchain/token-transfers/token-from-address/list/:tokenaddress/:address`
 
-## License
+### Analysis
+Analyze and find affiliated addresses based on transactions.
+* `GET /blockchain/analisys/affiliates/:address/:range`
 
-Nest is [MIT licensed](LICENSE).
+Check token transfer relations between addresses.
+* `GET /blockchain/token-transfers/relations/:address/:target`
+
+### Database Management
+Get the count of stored transactions.
+* `GET /blockchain/analisys/transactions/count`
+
+Get the count of stored token transfers.
+* `GET /blockchain/analisys/token-transfers/count`
