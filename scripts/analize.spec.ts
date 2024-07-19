@@ -21,10 +21,10 @@ async function main() {
     // console.log("Latest block: ", latestBlock);
 
     // const contractaddress = '0xa1d0E215a23d7030842FC67cE582a6aFa3CCaB83';
-    // const address = '0x7A57eaA048Dc74349743512B7Da762f7667A9108';
+    const address = '0xb81d70802a816b5dacba06d708b5acf19dcd436d';
 
     // const result = await blockchainService.findAffiliates(address, 10);
-    // const result = await blockchainService.addNewAddress(address);
+    const result = await blockchainService.uploadAddressTransactions(address);
 
     // const result = await blockchainService.findTokenTransfers('', address);
 
@@ -37,13 +37,7 @@ async function main() {
     // const result = await worker.fetchAllTokenTransfers(contractaddress, address, 0, latestBlock, 1, 10000, 'asc');
     // const result = await worker.fetchAllTokenTransfers('', address, 0, latestBlock, 1, 10000, 'asc');
     // const result = await worker.fetchAllTokenTransfers(contractaddress, '', 0, latestBlock, 1, 10000, 'asc');
-
-    const counBefore = await blockchainService.getTokenTransferCount();
-    await blockchainService.deleteAllTokenTransfers();
-    const countAfter = await blockchainService.getTokenTransferCount();
-    console.log(`Number of token transfers before: ${counBefore} Number of token transfers after: ${countAfter}`);
-
-    // await prismaService.$disconnect();
+    console.log("Transactions found: ", result.length);
 }
 
 main().catch(e => {

@@ -55,6 +55,16 @@ npm start
 ````
 The application will be available at http://localhost:3000.
 
+To open Prisma Studio:
+```bash
+npx prisma studio
+````
+To run script from *scripts* folder use
+```bash
+npx ts-node scripts/*script-name*.ts
+````
+
+
 ## Endpoints
 ### Fetch and Store Data
 Fetch and store all transactions for a specific address.

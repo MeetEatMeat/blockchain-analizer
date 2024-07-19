@@ -5,20 +5,20 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-async function main(contractaddress: string, address: string) {
+async function main(address: string) {
     const module: TestingModule = await Test.createTestingModule({
         providers: [BlockchainService, PrismaService],
     }).compile();
 
     const blockchainService = module.get<BlockchainService>(BlockchainService);
 
-    const counBefore = await blockchainService.getTokenTransferCount();
-    await blockchainService.updateTokenTransfers(contractaddress, address, true);
-    const countAfter = await blockchainService.getTokenTransferCount();
-    console.log(`Number of token transfers before: ${counBefore} Number of token transfers after: ${countAfter}`);
+    const countBefore = await blockchainService.getTransactionsCount();
+    await blockchainService.updateTransactions(address);
+    const countAfter = await blockchainService.getTransactionsCount();
+    console.log(`Number of token transfers before: ${countBefore} Number of token transfers after: ${countAfter}`);
 }
 
-main('0xb81d70802a816b5dacba06d708b5acf19dcd436d', '').catch(e => {
+main('0xb81d70802a816b5dacba06d708b5acf19dcd436d').catch(e => {
     console.error(e);
     process.exit(1);
 });
