@@ -182,41 +182,41 @@ export class BlockchainService {
     }
   }
 
-  async checkTokenTransferRelations(address: string, target: string): Promise<TokenTransfer[]> {
+  async collectExactAddressTransfers(address: string, target: string): Promise<TokenTransfer[]> {
     // Find all token transfers affiliated with the address
     const allTransfers = await this.updateTokenTransfers('', address, false);
     return allTransfers.filter(tx => tx.to === target || tx.from === target);
   }
   
-  async findERC20TransfersFromAddress(address: string): Promise<TokenTransfer[]> {
-    await this.updateTokenTransfers('', address, true);
-    try {
-      return await this.lookForAnyTokenTransfers(address);
-    } catch (error) {
-      console.error('Error fetching transactions:', error);
-      throw error;
-    }
-  }
+  // async findERC20TransfersFromAddress(address: string): Promise<TokenTransfer[]> {
+  //   await this.updateTokenTransfers('', address, true);
+  //   try {
+  //     return await this.lookForAnyTokenTransfers(address);
+  //   } catch (error) {
+  //     console.error('Error fetching transactions:', error);
+  //     throw error;
+  //   }
+  // }
 
-  async findERC20TransfersFromContract(contractaddress: string): Promise<TokenTransfer[]> {
-    await this.updateTokenTransfers(contractaddress, '', true);
-    try {
-      return await this.lookForAnyTokenTransfers(contractaddress);
-    } catch (error) {
-      console.error('Error fetching transactions:', error);
-      throw error;
-    }
-  }
+  // async findERC20TransfersFromContract(contractaddress: string): Promise<TokenTransfer[]> {
+  //   await this.updateTokenTransfers(contractaddress, '', true);
+  //   try {
+  //     return await this.lookForAnyTokenTransfers(contractaddress);
+  //   } catch (error) {
+  //     console.error('Error fetching transactions:', error);
+  //     throw error;
+  //   }
+  // }
 
-  async findTokenTransfersFromAddress(contractaddress: string, address: string): Promise<TokenTransfer[]> {
-    await this.updateTokenTransfers(contractaddress, address, true);
-    try {
-      return await this.lookForExactTokenTransfers(contractaddress, address);
-    } catch (error) {
-      console.error('Error fetching transactions:', error);
-      throw error;
-    }
-  }
+  // async findTokenTransfersFromAddress(contractaddress: string, address: string): Promise<TokenTransfer[]> {
+  //   await this.updateTokenTransfers(contractaddress, address, true);
+  //   try {
+  //     return await this.lookForExactTokenTransfers(contractaddress, address);
+  //   } catch (error) {
+  //     console.error('Error fetching transactions:', error);
+  //     throw error;
+  //   }
+  // }
 
   // If contractAddress (token) is placed only, it will fetch all token transfers of that token. 
   // To and From are arbitrary
@@ -225,8 +225,8 @@ export class BlockchainService {
   // If both contractAddress and address are placed, it will fetch all transfers of that token 
   // from that address OR to that address.
   async updateTokenTransfers(contractaddress: string, address: string, store: boolean): Promise<TokenTransfer[]> {
-    // const startBlock = await this.getLatestTokenTransferInDB(contractaddress, address);
-    const startBlock = 0;
+    const startBlock = await this.getLatestTokenTransferInDB(contractaddress, address);
+    // const startBlock = 0;
     console.log('updateTokenTransfers.Start block:', startBlock);
     const latestBlock = await this.worker.getLatestBlock();
 
@@ -245,9 +245,18 @@ export class BlockchainService {
     let result;
     if (contractAddress && address) {
       result = await this.prisma.tokenTransfer.findFirst({
-        where: {
-            contractAddress: contractAddress,
-            from: address
+        where: 
+        {
+          OR: [
+            {
+              contractAddress: contractAddress,
+              from: address
+            },
+            {
+              contractAddress: contractAddress,
+              to: address
+            }
+          ],
         },
         orderBy: {
           blockNumber: 'desc'
@@ -256,11 +265,10 @@ export class BlockchainService {
           blockNumber: true
         }
       });
-      console.log('Latest block in db Case 1', result);
     } else if (contractAddress) {
       result = await this.prisma.tokenTransfer.findFirst({
         where: {
-            from: contractAddress
+          contractAddress: contractAddress
         },
         orderBy: {
           blockNumber: 'desc'
@@ -269,25 +277,30 @@ export class BlockchainService {
           blockNumber: true
         }
       });
-      console.log('Latest block in db Case 2', result);
     } else if (address) {
       result = await this.prisma.tokenTransfer.findFirst({
-        where: {
-            from: address
+        where:
+        {
+          OR: [
+            {
+              from: address
+            },
+            {
+              to: address
+            }
+          ],
         },
         orderBy: {
           blockNumber: 'desc'
+        },
+        select: {
+          blockNumber: true
         }
-        // select: {
-        //   blockNumber: true
-        // }
       });
-      console.log('Latest block in db Case 3', result);
     } else {
       throw new NotFoundException('BlockchainService.tokenTransferGetLatestBlockInDB(): Invalid parameters');
     }
-    console.log('Latest block of token transfers in db: ', result);
-    return parseInt(result.blockNumber);
+    return parseInt(result === null ? '0' : result.blockNumber);
   }
 
   async saveToTokenTransfers(tokenTransfers: TokenTransfer[]): Promise<void> {
@@ -326,50 +339,196 @@ export class BlockchainService {
     }
   }
 
-  async lookForAnyTokenTransfers(address: string): Promise<TokenTransfer[]> {
-    const chunkSize = 100000;
-    const txs: any[] = [];
+  // async lookForAnyTokenTransfers(address: string): Promise<TokenTransfer[]> {
+  //   const chunkSize = 100000;
+  //   const txs: any[] = [];
   
-    while (true) {
-      const chunk = await this.prisma.transaction.findMany({
+  //   while (true) {
+  //     const chunk = await this.prisma.transaction.findMany({
+  //       where: {
+  //         from: address
+  //       },
+  //       skip: txs.length,
+  //       take: chunkSize,
+  //     });
+  
+  //     txs.push(...chunk);
+  
+  //     if (chunk.length === 0) {
+  //       break;
+  //     }
+  //   }
+  //   console.log(`Fetched ${txs.length} token transfers from database`);
+  //   return txs;
+  // }
+
+  // async lookForExactTokenTransfers(contractAddress: string, fromAddress: string): Promise<TokenTransfer[]> {
+  //   const chunkSize = 100000;
+  //   const txs: TokenTransfer[] = [];
+    
+  //   while (true) {
+  //     const chunk = await this.prisma.tokenTransfer.findMany({
+  //       where: {
+  //         from: fromAddress,
+  //         contractAddress: contractAddress
+  //       },
+  //       skip: txs.length,
+  //       take: chunkSize,
+  //     });
+      
+  //     txs.push(...chunk);
+      
+  //     if (chunk.length === 0) {
+  //       break;
+  //     }
+  //   }
+  //   console.log(`Fetched ${txs.length} token transfers from database`);
+  //   return txs;
+  // }
+
+  async collectAllContrparties(contractAddress: string, address: string): Promise<{ senders: string[], receivers: string[] }> {
+    const senders = new Set<string>();
+    const receivers = new Set<string>();
+
+    let transfers;
+
+    if (contractAddress && address) {
+      transfers = await this.prisma.tokenTransfer.findMany({
         where: {
-          from: address
+          OR: [
+            {
+              contractAddress: contractAddress,
+              to: address
+            },
+            {
+              contractAddress: contractAddress,
+              from: address
+            }
+          ],
         },
-        skip: txs.length,
-        take: chunkSize,
       });
-  
-      txs.push(...chunk);
-  
-      if (chunk.length === 0) {
-        break;
-      }
+    } else if (contractAddress) {
+      transfers = await this.prisma.tokenTransfer.findMany({
+        where: {
+          contractAddress: contractAddress,
+        },
+      });
+    } else if (address) {
+      transfers = await this.prisma.tokenTransfer.findMany({
+        where: {
+          OR: [
+            { from: address },
+            { to: address }
+          ],
+        },
+      });
+    } else {
+      transfers = [];
     }
-    console.log(`Fetched ${txs.length} token transfers from database`);
-    return txs;
+
+    transfers.forEach(transfer => {
+      if (transfer.from === address) {
+        receivers.add(transfer.to);
+      } else if (transfer.to === address) {
+        senders.add(transfer.from);
+      } else {
+        senders.add(transfer.from);
+        receivers.add(transfer.to);
+      }
+    });
+
+    return {
+      senders: Array.from(senders).sort(),
+      receivers: Array.from(receivers).sort()
+    };
   }
 
-  async lookForExactTokenTransfers(contractAddress: string, fromAddress: string): Promise<TokenTransfer[]> {
-    const chunkSize = 100000;
-    const txs: TokenTransfer[] = [];
-    
-    while (true) {
-      const chunk = await this.prisma.tokenTransfer.findMany({
-        where: {
-          from: fromAddress,
-          contractAddress: contractAddress
-        },
-        skip: txs.length,
-        take: chunkSize,
-      });
-      
-      txs.push(...chunk);
-      
-      if (chunk.length === 0) {
-        break;
-      }
-    }
-    console.log(`Fetched ${txs.length} token transfers from database`);
-    return txs;
-  }
+  // async collectAllContrparties(contractAddress: string, address: string): Promise<{ senders: string[], receivers: string[] }> {
+  //   console.log('collectAllContrparties. contractAddress:', contractAddress, 'address:', address);
+  //   const chunkSize = 100000;
+  //   const senders: string[] = [];
+  //   const receivers: string[] = [];
+
+  //   let totalTransfers = 0;
+  //   let skip = 0;
+
+  //   while (true) {
+  //     let transfers;
+
+  //     if (contractAddress && address) {
+  //       transfers = await this.prisma.tokenTransfer.findMany({
+  //         where: {
+  //           OR: [
+  //             {
+  //               contractAddress: contractAddress,
+  //               to: address
+  //             },
+  //             {
+  //               contractAddress: contractAddress,
+  //               from: address
+  //             }
+  //           ],
+  //         },
+  //         skip: skip,
+  //         take: chunkSize
+  //       });
+  //       console.log(`collectAllContrparties. Variant 1. Fetched ${transfers.length} token transfers from database`);
+  //     } else if (contractAddress) {
+  //       transfers = await this.prisma.tokenTransfer.findMany({
+  //         where: {
+  //           contractAddress: contractAddress,
+  //         },
+  //         select: {
+  //           from: true,
+  //           to: true
+  //         },
+  //         skip: skip,
+  //         take: chunkSize
+  //       });
+  //       console.log(`collectAllContrparties. Variant 2. Fetched ${transfers.length} token transfers from database`);
+  //     } else if (address) {
+  //       transfers = await this.prisma.tokenTransfer.findMany({
+  //         where: {
+  //           OR: [
+  //             { from: address },
+  //             { to: address }
+  //           ],
+  //         },
+  //         skip: skip,
+  //         take: chunkSize
+  //       });
+  //       console.log(`collectAllContrparties. Variant 3. Fetched ${transfers.length} token transfers from database`);
+  //     } else {
+  //       transfers = [];
+  //     }
+
+  //     if (transfers.length === 0) {
+  //       break;
+  //     }
+
+  //     totalTransfers += transfers.length;
+  //     console.log(`collectAllContrparties. Fetched ${totalTransfers} token transfers from database`);
+
+  //     transfers.forEach(transfer => {
+  //       if (transfer.from === address) {
+  //         console.log('Transfers ForEach. Variant 1. Receiver: ', transfer.to);
+  //         receivers.push(transfer.to);
+  //       } else if (transfer.to === address) {
+  //         console.log('Transfers ForEach. Variant 2. Sender: ', transfer.from);
+  //         senders.push(transfer.from);
+  //       } else {
+  //         senders.push(transfer.from);
+  //         receivers.push(transfer.to);
+  //         console.log('Transfers ForEach. Variant 3. Sender and Receiver: ', transfer.from, transfer.to);
+  //       }
+  //     });
+
+  //     skip += chunkSize;
+  //   }
+
+  //   return {
+  //     senders: senders,
+  //     receivers: receivers
+  //   };
+  // }
 }

@@ -20,24 +20,24 @@ export class BlockchainController {
     return await this.blockchainService.getTokenTransferCount();
   }
 
-  @Get('token-transfers/relations/:address/:target')
+  @Get('token-transfers/tx-list/:address/:target')
   async checkTokenTransferRelations(@Param('address') address: string, @Param('target') target: string) {
-    return await this.blockchainService.checkTokenTransferRelations(address, target);
+    return await this.blockchainService.collectExactAddressTransfers(address.toLowerCase(), target.toLowerCase());
   }
 
-  @Get('token-transfers/from-address/list/:address')
+  @Get('token-transfers/address-list/exact-address/:address')
   async findERC20TransfersFromAddress(@Param('address') address: string) {
-    return await this.blockchainService.findERC20TransfersFromAddress(address);
+    return await this.blockchainService.collectAllContrparties('', address.toLowerCase());
   }
 
-  @Get('token-transfers/from-contract/list/:contractaddress')
+  @Get('token-transfers/address-list/exact-token/:contractaddress')
   async findERC20TransfersFromContract(@Param('contractaddress') contractaddress: string) {
-    return await this.blockchainService.findERC20TransfersFromContract(contractaddress);
+    return await this.blockchainService.collectAllContrparties(contractaddress.toLowerCase(), '');
   }
 
-  @Get('token-transfers/token-from-address/list/:tokenaddress/:address')
+  @Get('token-transfers/address-list/exact-all/:contractaddress/:address')
   async findTokenTransfersFromAddress(@Param('tokenaddress') tokenaddress: string, @Param('address') address: string) {
-    return await this.blockchainService.findTokenTransfersFromAddress(tokenaddress, address);
+    return await this.blockchainService.collectAllContrparties(tokenaddress.toLowerCase(), address.toLowerCase());
   }
 
 }

@@ -19,5 +19,4 @@ export interface TokenTransfer {
     cumulativeGasUsed: string;
     input: string;
     confirmations: string;
-  }
-  
+}
