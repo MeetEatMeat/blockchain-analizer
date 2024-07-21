@@ -33,4 +33,5 @@ main('0xfaba6f8e4a5e8ab82f62fe7c39859fa577269be3', '').catch(e => {
 // '0xba12222222228d8ba445958a75a0704d566bf2c8' Balancer vault
 // '0xa1d0E215a23d7030842FC67cE582a6aFa3CCaB83' Yfii token
 // '0xfaba6f8e4a5e8ab82f62fe7c39859fa577269be3' ONDO token
-// '0x6a90063EEe5c46e874d382984D7f5860E5B00744' ONDO sender 1
+// '0x00000000000006b2ab6decbc6fc7ec6bd2fbc720' ONDO sender 1
+// '0x0000000000007f150bd6f54c40a34d7c3d5e9f56' ONDO sender 2

@@ -184,8 +184,11 @@ export class BlockchainService {
 
   async collectExactAddressTransfers(address: string, target: string): Promise<TokenTransfer[]> {
     // Find all token transfers affiliated with the address
-    const allTransfers = await this.updateTokenTransfers('', address, false);
-    return allTransfers.filter(tx => tx.to === target || tx.from === target);
+    console.log('collectExactAddressTransfers. Address:', address, 'Target:', target);
+    const newTransfers = await this.updateTokenTransfers('', address);
+    console.log('collectExactAddressTransfers. New transfers:', newTransfers.length);
+    const addressTokenTransfers = await this.lookForAnyTokenTransfers(address);
+    return addressTokenTransfers.filter(tx => tx.from === target || tx.to === target);
   }
   
   // async findERC20TransfersFromAddress(address: string): Promise<TokenTransfer[]> {
@@ -224,7 +227,7 @@ export class BlockchainService {
   // that address. ContractAddress (token) is arbitrary
   // If both contractAddress and address are placed, it will fetch all transfers of that token 
   // from that address OR to that address.
-  async updateTokenTransfers(contractaddress: string, address: string, store: boolean): Promise<TokenTransfer[]> {
+  async updateTokenTransfers(contractaddress: string, address: string, store: boolean = true): Promise<TokenTransfer[]> {
     const startBlock = await this.getLatestTokenTransferInDB(contractaddress, address);
     // const startBlock = 0;
     console.log('updateTokenTransfers.Start block:', startBlock);
@@ -339,6 +342,19 @@ export class BlockchainService {
     }
   }
 
+  async lookForAnyTokenTransfers(address: string): Promise<TokenTransfer[]> {
+    const txs = await this.prisma.tokenTransfer.findMany({
+      where: {
+        OR: [
+          {from: address},
+          {to: address}
+        ]
+      }
+    });
+    // console.log(`Fetched ${txs} token transfers from database`);
+    return txs;
+  }
+
   // async lookForAnyTokenTransfers(address: string): Promise<TokenTransfer[]> {
   //   const chunkSize = 100000;
   //   const txs: any[] = [];
@@ -346,11 +362,15 @@ export class BlockchainService {
   //   while (true) {
   //     const chunk = await this.prisma.transaction.findMany({
   //       where: {
-  //         from: address
+  //         OR: [
+  //           {from: address},
+  //           {to: address}
+  //         ]
   //       },
   //       skip: txs.length,
   //       take: chunkSize,
   //     });
+  //     console.log(`Fetched ${chunk.length} transactions from database`);
   
   //     txs.push(...chunk);
   

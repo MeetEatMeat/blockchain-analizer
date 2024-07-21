@@ -20,7 +20,7 @@ export class BlockchainController {
     return await this.blockchainService.getTokenTransferCount();
   }
 
-  @Get('token-transfers/tx-list/:address/:target')
+  @Get('token-transfers/relations/:address/:target')
   async checkTokenTransferRelations(@Param('address') address: string, @Param('target') target: string) {
     return await this.blockchainService.collectExactAddressTransfers(address.toLowerCase(), target.toLowerCase());
   }
