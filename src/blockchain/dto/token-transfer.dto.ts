@@ -1,4 +1,3 @@
-// src/dto/token-transfer.dto.ts
 export interface TokenTransfer {
     hash: string;
     blockNumber: string;

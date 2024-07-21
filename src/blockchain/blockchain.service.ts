@@ -6,6 +6,7 @@ import { Transaction, TokenTransfer, Prisma } from '@prisma/client';
 import checkAffiliates from './libs/analisys';
 import { BlockchainWorker } from './libs/blockchainWorker';
 import { error } from 'console';
+import { Label } from './dto/labels.dto';
 
 @Injectable()
 export class BlockchainService {
@@ -31,6 +32,15 @@ export class BlockchainService {
       return checkAffiliates(allTransactions, range);
     } catch (error) {
       console.error('Error fetching transactions:', error);
+      throw error;
+    }
+  }
+
+  async getLabels(address: string): Promise<Label> {
+    try {
+      return await this.worker.getLabels(address);
+    } catch (error) {
+      console.error('Error fetching labels:', error);
       throw error;
     }
   }

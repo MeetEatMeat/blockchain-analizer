@@ -1,12 +1,25 @@
 import axios from 'axios';
 import { Transaction } from '../dto/transaction.dto';
 import { TokenTransfer } from '../dto/token-transfer.dto';
+import { NotFoundException } from '@nestjs/common/exceptions/not-found.exception';
+import { Label } from '../dto/labels.dto';
 
 class BlockchainWorker {
     private apiKey: string;
 
     constructor(apiKey: string) {
         this.apiKey = apiKey;
+    }
+
+    async getLabels(address: string): Promise<Label> {
+        const url = `${process.env.LABELS_API}${address}`;
+        try {
+            const response = await axios.get(url);
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching labels:', error);
+            throw new NotFoundException('Labels not found for the given address');
+        }
     }
 
     getNetwork(): string {
