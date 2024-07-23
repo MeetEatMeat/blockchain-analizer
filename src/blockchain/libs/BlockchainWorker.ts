@@ -11,7 +11,7 @@ class BlockchainWorker {
         this.apiKey = apiKey;
     }
 
-    async getLabels(address: string): Promise<Label> {
+    async getLabels(address: string): Promise<Label[]> {
         const url = `${process.env.LABELS_API}${address}`;
         try {
             const response = await axios.get(url);

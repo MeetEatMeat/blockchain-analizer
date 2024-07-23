@@ -2,11 +2,11 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { BlockchainDto } from './dto/create-blockchain.dto';
 import { UpdateBlockchainDto } from './dto/update-blockchain.dto';
 import { PrismaService } from '../prisma.service';
-import { Transaction, TokenTransfer, Prisma } from '@prisma/client';
+import { Transaction, TokenTransfer, Prisma, Address, Label } from '@prisma/client';
 import checkAffiliates from './libs/analisys';
 import { BlockchainWorker } from './libs/blockchainWorker';
 import { error } from 'console';
-import { Label } from './dto/labels.dto';
+import { Label as LabelType } from './dto/labels.dto';
 
 @Injectable()
 export class BlockchainService {
@@ -36,13 +36,56 @@ export class BlockchainService {
     }
   }
 
-  async getLabels(address: string): Promise<Label> {
+  async getLabels(address: string): Promise<LabelType[]> {
     try {
       return await this.worker.getLabels(address);
     } catch (error) {
       console.error('Error fetching labels:', error);
       throw error;
     }
+  }
+
+  async loadLabels(address: string): Promise<LabelType[]> {
+    const existingAddress = await this.prisma.address.findUnique({
+      where: { address },
+      include: { labels: true },
+    });
+
+    if (!existingAddress) {
+      throw new NotFoundException('Address not found');
+    }
+
+    const labels = existingAddress.labels.map(label => ({
+      address: existingAddress.address,
+      chainId: label.chainId,
+      label: label.label,
+      name: label.name,
+      symbol: label.symbol,
+      website: label.website,
+      image: label.image,
+    }));
+
+    return labels;
+  }
+
+  async storeLabels(labels: LabelType[], address: string): Promise<void> {
+    await this.prisma.address.upsert({
+      where: { address },
+      update: {},
+      create: {
+        address,
+        labels: {
+          create: labels.map(label => ({
+            chainId: label.chainId,
+            label: label.label ?? null,
+            name: label.name ?? null,
+            symbol: label.symbol ?? null,
+            website: label.website ?? null,
+            image: label.image ?? null,
+          })),
+        },
+      },
+    });
   }
 
   ///////////////////////////////////////////////////////////////////////////////////////

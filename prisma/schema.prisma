@@ -14,44 +14,62 @@ datasource db {
 }
 
 model Transaction {
-  hash               String @id
-  blockNumber        String
-  timeStamp          String
-  nonce              String
-  blockHash          String
-  transactionIndex   String
-  from               String
-  to                 String
-  value              String
-  gas                String
-  gasPrice           String
-  isError            String
-  txreceipt_status   String
-  input              String
-  contractAddress    String
-  cumulativeGasUsed  String
-  gasUsed            String
-  confirmations      String
+  hash              String @id
+  blockNumber       String
+  timeStamp         String
+  nonce             String
+  blockHash         String
+  transactionIndex  String
+  from              String
+  to                String
+  value             String
+  gas               String
+  gasPrice          String
+  isError           String
+  txreceipt_status  String
+  input             String
+  contractAddress   String
+  cumulativeGasUsed String
+  gasUsed           String
+  confirmations     String
 }
 
 model TokenTransfer {
-  hash               String @id
-  blockNumber        String
-  timeStamp          String
-  nonce              String
-  blockHash          String
-  from               String
-  contractAddress    String
-  to                 String
-  value              String
-  tokenName          String
-  tokenSymbol        String
-  tokenDecimal       String
-  transactionIndex   String
-  gas                String
-  gasPrice           String
-  gasUsed            String
-  cumulativeGasUsed  String
-  input              String
-  confirmations      String
+  hash              String @id
+  blockNumber       String
+  timeStamp         String
+  nonce             String
+  blockHash         String
+  from              String
+  contractAddress   String
+  to                String
+  value             String
+  tokenName         String
+  tokenSymbol       String
+  tokenDecimal      String
+  transactionIndex  String
+  gas               String
+  gasPrice          String
+  gasUsed           String
+  cumulativeGasUsed String
+  input             String
+  confirmations     String
+}
+
+model Address {
+  id      Int     @id @default(autoincrement())
+  address String  @unique
+  labels  Label[]
+}
+
+model Label {
+  id             Int     @id @default(autoincrement())
+  address        Address @relation(fields: [addressId], references: [id])
+  addressId      Int
+  chainId        Int
+  label          String?
+  name           String?
+  symbol         String?
+  website        String?
+  image          String?
 }
