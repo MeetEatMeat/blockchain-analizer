@@ -20,7 +20,7 @@ async function main(contractAddress: string, address: string) {
     console.log("Receivers found: ", result.receivers);
 }
 
-main('0xfaba6f8e4a5e8ab82f62fe7c39859fa577269be3', '').catch(e => {
+main('', '0x6a90063EEe5c46e874d382984D7f5860E5B00744').catch(e => {
     console.error(e);
     process.exit(1);
 });

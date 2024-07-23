@@ -7,6 +7,7 @@ import checkAffiliates from './libs/analisys';
 import { BlockchainWorker } from './libs/blockchainWorker';
 import { error } from 'console';
 import { Label as LabelType } from './dto/labels.dto';
+import { AddressResponse } from './dto/address.dto';
 
 @Injectable()
 export class BlockchainService {
@@ -37,8 +38,21 @@ export class BlockchainService {
   }
 
   async getLabels(address: string): Promise<LabelType[]> {
+    const labelsFromDb = await this.loadLabels(address);
+
+    if (labelsFromDb.length > 0) {
+      return labelsFromDb;
+    }
+
     try {
-      return await this.worker.getLabels(address);
+      const labelsFromApi = await this.worker.getLabels(address);
+
+      if (labelsFromApi.length > 0) {
+        await this.storeLabels(labelsFromApi, address);
+        return labelsFromApi;
+      }
+
+      return [];
     } catch (error) {
       console.error('Error fetching labels:', error);
       throw error;
@@ -52,7 +66,7 @@ export class BlockchainService {
     });
 
     if (!existingAddress) {
-      throw new NotFoundException('Address not found');
+      return [];
     }
 
     const labels = existingAddress.labels.map(label => ({
@@ -459,11 +473,11 @@ export class BlockchainService {
   //   return txs;
   // }
 
-  async collectAllContrparties(contractAddress: string, address: string): Promise<{ senders: string[], receivers: string[] }> {
+  async collectAllContrparties(contractAddress: string, address: string): Promise<{ senders: AddressResponse[], receivers: AddressResponse[] }> {
     const senders = new Set<string>();
     const receivers = new Set<string>();
 
-    let transfers;
+    let transfers: TokenTransfer[];
 
     if (contractAddress && address) {
       transfers = await this.prisma.tokenTransfer.findMany({
@@ -499,22 +513,42 @@ export class BlockchainService {
       transfers = [];
     }
 
-    transfers.forEach(transfer => {
+    for (const transfer of transfers) {
       if (transfer.from === address) {
         receivers.add(transfer.to);
-      } else if (transfer.to === address) {
-        senders.add(transfer.from);
-      } else {
-        senders.add(transfer.from);
-        receivers.add(transfer.to);
       }
-    });
+
+      if (transfer.to === address) {
+        senders.add(transfer.from);
+      }
+
+      if (transfer.from === address && transfer.to === address) {
+        receivers.add(transfer.to);
+        senders.add(transfer.from);
+      }
+    }
+
+    const sendersArray = await this.getAddressResponses(Array.from(senders));
+    const receiversArray = await this.getAddressResponses(Array.from(receivers));
 
     return {
-      senders: Array.from(senders).sort(),
-      receivers: Array.from(receivers).sort()
+      senders: sendersArray.sort((a, b) => a.address.localeCompare(b.address)),
+      receivers: receiversArray.sort((a, b) => a.address.localeCompare(b.address))
     };
   }
+
+  private async getAddressResponses(addresses: string[]): Promise<AddressResponse[]> {
+    const responses: AddressResponse[] = [];
+
+    for (const address of addresses) {
+      const labels = await this.getLabels(address);
+      const name = labels.length > 0 ? labels[0].name : '';
+      responses.push({ address, name });
+    }
+
+    return responses;
+  }
+
 
   // async collectAllContrparties(contractAddress: string, address: string): Promise<{ senders: string[], receivers: string[] }> {
   //   console.log('collectAllContrparties. contractAddress:', contractAddress, 'address:', address);
