@@ -46,6 +46,7 @@ export class BlockchainService {
 
     try {
       const labelsFromApi = await this.worker.getLabels(address);
+      console.log("Requesting labels from API for:", address);
 
       if (labelsFromApi.length > 0) {
         await this.storeLabels(labelsFromApi, address);
@@ -542,7 +543,7 @@ export class BlockchainService {
 
     for (const address of addresses) {
       const labels = await this.getLabels(address);
-      const name = labels.length > 0 ? labels[0].name : '';
+      const name = labels.length > 0 ? ((labels[0].name === null || typeof labels[0].name === 'undefined') ? '' : labels[0].name) : '';
       responses.push({ address, name });
     }
 
