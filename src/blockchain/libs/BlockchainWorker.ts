@@ -22,6 +22,24 @@ class BlockchainWorker {
         }
     }
 
+    async getBalance(address: string): Promise<string> {
+        const BASE_URL = `https://api.etherscan.io/api?module=account&action=balance&tag=latest&apikey=${process.env.ETH_API_KEY}`;
+        const url = `${BASE_URL}&address=${address}`;
+        try {
+          const response = await axios.get(url);
+          // console.log(response);
+          if (response.data.status === '1') {
+            return response.data.result;
+          } else {
+            console.error(`Error fetching balance for ${address}: ${response.data.message}`);
+            return '0';
+          }
+        } catch (error) {
+          console.error(`Error fetching balance for ${address}: ${error}`);
+          return '0';
+        }
+    }
+
     getNetwork(): string {
         return 'https://api.etherscan.io/api';
     }

@@ -523,7 +523,7 @@ export class BlockchainService {
         senders.add(transfer.from);
       }
 
-      if (transfer.from === address && transfer.to === address) {
+      if (transfer.from !== address && transfer.to !== address) {
         receivers.add(transfer.to);
         senders.add(transfer.from);
       }
@@ -544,7 +544,7 @@ export class BlockchainService {
     for (const address of addresses) {
       const labels = await this.getLabels(address);
       const name = labels.length > 0 ? ((labels[0].name === null || typeof labels[0].name === 'undefined') ? '' : labels[0].name) : '';
-      responses.push({ address, name });
+      if(name.length > 0) responses.push({ address, name });
     }
 
     return responses;

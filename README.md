@@ -92,3 +92,8 @@ Get the count of stored transactions.
 
 Get the count of stored token transfers.
 * `GET /blockchain/analisys/token-transfers/count`
+
+To start API in dev mode run:
+```bash
+npm run start:dev
+```
