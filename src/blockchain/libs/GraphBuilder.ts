@@ -33,3 +33,5 @@ class GraphBuilder {
     return this.graph;
   }
 }
+
+export { GraphBuilder, TransactionNode, Transaction };

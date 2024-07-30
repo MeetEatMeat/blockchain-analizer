@@ -5,9 +5,9 @@ import { PrismaService } from '../prisma.service';
 import { Transaction, TokenTransfer, Prisma, Address, Label } from '@prisma/client';
 import checkAffiliates from './libs/analisys';
 import { BlockchainWorker } from './libs/blockchainWorker';
-import { error } from 'console';
 import { Label as LabelType } from './dto/labels.dto';
 import { AddressResponse } from './dto/address.dto';
+import { Interaction } from './dto/interactions.dto';
 
 @Injectable()
 export class BlockchainService {
@@ -19,6 +19,10 @@ export class BlockchainService {
 
   updateWorker(apiKey: string) {
     this.worker = new BlockchainWorker(apiKey);
+  }
+
+  async getWorker(): Promise<BlockchainWorker> {
+    return this.worker;
   }
 
   async uploadAddressTransactions(address: string): Promise<string> {
@@ -35,6 +39,10 @@ export class BlockchainService {
       console.error('Error fetching transactions:', error);
       throw error;
     }
+  }
+
+  async getAllInteractions(addresses: string[]): Promise<Interaction[]> {
+    return [];
   }
 
   async getLabels(address: string): Promise<LabelType[]> {
@@ -130,9 +138,12 @@ export class BlockchainService {
 
   async updateTransactions(address: string): Promise<Transaction[]> {
     const startBlock = await this.transactionsGetLatestBlockInDB(address);
+    console.log('updateTransactions. Start block:', startBlock);
     const latestBlock = await this.worker.getLatestBlock();
+    console.log('updateTransactions. Latest block:', latestBlock);
 
     const transactions = await this.worker.fetchAllTransactions(address, startBlock, latestBlock, 1, 10000, 'asc');
+    console.log('updateTransactions. Transactions:', transactions.length);
     await this.saveToTransactions(transactions);
 
     return transactions;
@@ -140,6 +151,7 @@ export class BlockchainService {
 
   async transactionsGetLatestBlockInDB(address: string): Promise<number> {
     const transactionsCount = await this.prisma.transaction.count();
+    console.log('transactionsGetLatestBlockInDB. Transactions count:', transactionsCount);
     if (transactionsCount === 0) {
       return 0;
     }
@@ -163,7 +175,7 @@ export class BlockchainService {
       throw new NotFoundException('BlockchainService.transactionsGetLatestBlockInDB(): Invalid parameters');
     }
     console.log('Latest block of transactions in db:', result);
-    return parseInt(result.blockNumber);
+    return parseInt(result === null ? '0' : result.blockNumber);
   }
 
   async saveToTransactions(transactions: Transaction[]): Promise<void> {

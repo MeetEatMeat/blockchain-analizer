@@ -18,7 +18,7 @@ async function main(address: string) {
     console.log(`Number of token transfers before: ${countBefore} Number of token transfers after: ${countAfter}`);
 }
 
-main('0xb81d70802a816b5dacba06d708b5acf19dcd436d').catch(e => {
+main('0xfaba6f8e4a5e8ab82f62fe7c39859fa577269be3').catch(e => {
     console.error(e);
     process.exit(1);
 });
