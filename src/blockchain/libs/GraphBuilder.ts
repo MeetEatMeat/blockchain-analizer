@@ -1,9 +1,9 @@
 import * as graphlib from 'graphlib';
-import { Transaction } from '../dto/transaction.dto';
+import { ITransaction } from '../dto/interactions.dto';
 
 interface TransactionNode {
   address: string;
-  transactions: Transaction[];
+  transactions: ITransaction[];
 }
 
 class GraphBuilder {
@@ -13,7 +13,7 @@ class GraphBuilder {
     this.graph = new graphlib.Graph({ directed: false });
   }
 
-  addTransaction(transaction: Transaction) {
+  addTransaction(transaction: ITransaction) {
     if (!this.graph.hasNode(transaction.from)) {
       this.graph.setNode(transaction.from);
     }
@@ -25,7 +25,7 @@ class GraphBuilder {
     this.graph.setEdge(transaction.from, transaction.to);
   }
 
-  buildGraph(transactions: Transaction[]) {
+  buildGraph(transactions: ITransaction[]) {
     transactions.forEach(transaction => this.addTransaction(transaction));
   }
 
@@ -34,4 +34,4 @@ class GraphBuilder {
   }
 }
 
-export { GraphBuilder, TransactionNode, Transaction };
+export { GraphBuilder, TransactionNode, ITransaction };

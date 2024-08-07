@@ -1,7 +1,7 @@
 import { createObjectCsvWriter } from 'csv-writer';
 import * as path from 'path';
 import * as fs from 'fs';
-import { ITransaction, ITokenTransfer } from '../dto/interactions.dto';
+import { ITransaction, ITokenTransfer, Counterparty, ExportCounterparties } from '../dto/interactions.dto';
 import * as csv from 'csv-parser';
 
 
@@ -64,6 +64,32 @@ const saveTokenTransfersToCSV = async (tokenTransfers: ITokenTransfer[], directo
     console.log(`Token transfers saved to ${filename}`);
 }
 
+const saveCounterpartiesToCSV = async (counterparties: ExportCounterparties, directory: string, filename: string) => {
+    const sendersFileName = `senders_${filename}`;
+    const sendersWriter = createObjectCsvWriter({
+        path: path.join(directory, sendersFileName),
+        header: [
+            { id: 'address', title: 'Address' },
+            { id: 'name', title: 'Name' },
+            { id: 'interactions', title: 'Interactions' }
+        ]
+    });
+
+    const receiversFileName = `receivers_${filename}`;
+    const receiversWriter = createObjectCsvWriter({
+        path: path.join(directory, receiversFileName),
+        header: [
+            { id: 'address', title: 'Address' },
+            { id: 'name', title: 'Name' },
+            { id: 'interactions', title: 'Interactions' }
+        ]
+    });
+
+    await sendersWriter.writeRecords(counterparties.senders);
+    await receiversWriter.writeRecords(counterparties.receivers);
+    console.log(`Counterparties saved to 'receivers_${filename}' and 'senders_${filename}'`);
+};
+
 const readTransactionsFromCsv = async (directory: string, filename: string): Promise<ITransaction[]> => {
     const filePath = path.join(directory, filename);
 
@@ -100,4 +126,44 @@ const readTokenTransfersFromCsv = async (directory: string, filename: string): P
     });
 }
 
-export { saveTransactionsToCSV, saveTokenTransfersToCSV, readTokenTransfersFromCsv, readTransactionsFromCsv };
+const readCounterpartiesFromCsv = async (filePath: string): Promise<Counterparty[]> => {
+    if(!fs.existsSync(filePath)) {
+        throw new Error(`File not found: ${filePath}`);
+    }
+
+    const counterparties: Counterparty[] = [];
+
+    return new Promise((resolve, reject) => {
+        fs.createReadStream(filePath)
+            .pipe(csv())
+            .on('data', (data) => counterparties.push(data as Counterparty))
+            .on('end', () => resolve(counterparties))
+            .on('error', (error) => reject(error));
+    });
+};
+
+const readAddressesFromCsv = async (filePath: string): Promise<string[]> => {
+    if(!fs.existsSync(filePath)) {
+        throw new Error(`File not found: ${filePath}`);
+    }
+
+    const addresses: string[] = [];
+
+    return new Promise((resolve, reject) => {
+        fs.createReadStream(filePath)
+            .pipe(csv())
+            .on('data', (data) => addresses.push(data.Address))
+            .on('end', () => resolve(addresses))
+            .on('error', (error) => reject(error));
+    });
+};
+
+export { 
+    saveTransactionsToCSV, 
+    saveTokenTransfersToCSV, 
+    readTokenTransfersFromCsv, 
+    readTransactionsFromCsv,
+    saveCounterpartiesToCSV,
+    readCounterpartiesFromCsv,
+    readAddressesFromCsv
+};

@@ -1,7 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BlockchainService } from '../src/blockchain/blockchain.service';
-import { PrismaService } from '../src/prisma.service';
+import { BlockchainService } from '../../src/blockchain/blockchain.service';
+import { PrismaService } from '../../src/prisma.service';
 import * as dotenv from 'dotenv';
+import * as path from 'path';
+import * as fs from 'fs';
 
 dotenv.config();
 
@@ -14,10 +16,15 @@ async function main(contractAddress: string, address: string) {
 
     await blockchainService.updateTokenTransfers(
         contractAddress.toLowerCase(), address.toLowerCase(), true);
-    const result = await blockchainService.collectAllContrparties(
+    const result = await blockchainService.collectAllCounterparties(
         contractAddress.toLowerCase(), address.toLowerCase());
     console.log("Senders found: ", result.senders);
     console.log("Receivers found: ", result.receivers);
+    
+    const reportsDirectory = path.join(__dirname, './outputs');
+    if (!fs.existsSync(reportsDirectory)) {
+        fs.mkdirSync(reportsDirectory, { recursive: true });
+    }
 }
 
 main('0xfaba6f8e4a5e8ab82f62fe7c39859fa577269be3', '').catch(e => {

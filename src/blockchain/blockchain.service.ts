@@ -1,13 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { BlockchainDto } from './dto/create-blockchain.dto';
-import { UpdateBlockchainDto } from './dto/update-blockchain.dto';
 import { PrismaService } from '../prisma.service';
 import { Transaction, TokenTransfer, Prisma, Address, Label } from '@prisma/client';
 import checkAffiliates from './libs/analisys';
 import { BlockchainWorker } from './libs/blockchainWorker';
 import { Label as LabelType } from './dto/labels.dto';
-import { AddressResponse } from './dto/address.dto';
-import { Interaction } from './dto/interactions.dto';
+import { Counterparty, ExportCounterparties, Interaction, ITokenTransfer, ITransaction } from './dto/interactions.dto';
 
 @Injectable()
 export class BlockchainService {
@@ -270,36 +267,6 @@ export class BlockchainService {
     const addressTokenTransfers = await this.lookForAnyTokenTransfers(address);
     return addressTokenTransfers.filter(tx => tx.from === target || tx.to === target);
   }
-  
-  // async findERC20TransfersFromAddress(address: string): Promise<TokenTransfer[]> {
-  //   await this.updateTokenTransfers('', address, true);
-  //   try {
-  //     return await this.lookForAnyTokenTransfers(address);
-  //   } catch (error) {
-  //     console.error('Error fetching transactions:', error);
-  //     throw error;
-  //   }
-  // }
-
-  // async findERC20TransfersFromContract(contractaddress: string): Promise<TokenTransfer[]> {
-  //   await this.updateTokenTransfers(contractaddress, '', true);
-  //   try {
-  //     return await this.lookForAnyTokenTransfers(contractaddress);
-  //   } catch (error) {
-  //     console.error('Error fetching transactions:', error);
-  //     throw error;
-  //   }
-  // }
-
-  // async findTokenTransfersFromAddress(contractaddress: string, address: string): Promise<TokenTransfer[]> {
-  //   await this.updateTokenTransfers(contractaddress, address, true);
-  //   try {
-  //     return await this.lookForExactTokenTransfers(contractaddress, address);
-  //   } catch (error) {
-  //     console.error('Error fetching transactions:', error);
-  //     throw error;
-  //   }
-  // }
 
   // If contractAddress (token) is placed only, it will fetch all token transfers of that token. 
   // To and From are arbitrary
@@ -434,6 +401,139 @@ export class BlockchainService {
     // console.log(`Fetched ${txs} token transfers from database`);
     return txs;
   }
+  
+  async collectAllCounterparties(contractAddress: string, address: string): Promise<ExportCounterparties> {
+    const senders: string[] = [];
+    const receivers: string[] = [];
+    const sendersCount: { [key: string]: number } = {};
+    const receiversCount: { [key: string]: number } = {};
+  
+    const transfers = await this.getTransfers(contractAddress, address);
+  
+    for (const transfer of transfers) {
+      if (transfer.from === address) {
+        receivers.push(transfer.to);
+        receiversCount[transfer.to] = (receiversCount[transfer.to] || 0) + 1;
+      }
+  
+      if (transfer.to === address) {
+        senders.push(transfer.from);
+        sendersCount[transfer.from] = (sendersCount[transfer.from] || 0) + 1;
+      }
+  
+      if (transfer.from !== address && transfer.to !== address) {
+        receivers.push(transfer.to);
+        senders.push(transfer.from);
+        receiversCount[transfer.to] = (receiversCount[transfer.to] || 0) + 1;
+        sendersCount[transfer.from] = (sendersCount[transfer.from] || 0) + 1;
+      }
+    }
+
+    const transactions = await this.getTransactions(address);
+
+    for (const transaction of transactions) {
+      if (transaction.from === address) {
+        receivers.push(transaction.to);
+        receiversCount[transaction.to] = (receiversCount[transaction.to] || 0) + 1;
+      }
+  
+      if (transaction.to === address) {
+        senders.push(transaction.from);
+        sendersCount[transaction.from] = (sendersCount[transaction.from] || 0) + 1;
+      }
+  
+      if (transaction.from !== address && transaction.to !== address) {
+        receivers.push(transaction.to);
+        senders.push(transaction.from);
+        receiversCount[transaction.to] = (receiversCount[transaction.to] || 0) + 1;
+        sendersCount[transaction.from] = (sendersCount[transaction.from] || 0) + 1;
+      }
+    }
+  
+    const sendersArray = await this.buildCounterparties(senders, sendersCount);
+    const receiversArray = await this.buildCounterparties(receivers, receiversCount);
+  
+    return {
+      senders: sendersArray.sort((a, b) => a.address.localeCompare(b.address)),
+      receivers: receiversArray.sort((a, b) => a.address.localeCompare(b.address)),
+    };
+  }
+  
+  private async getTransfers(contractAddress: string, address: string): Promise<TokenTransfer[]> {
+    const whereClause = this.buildWhereClause(contractAddress, address);
+    return await this.prisma.tokenTransfer.findMany({ where: whereClause });
+  }
+
+  private async getTransactions(address: string): Promise<Transaction[]> {
+    const whereClause = this.buildWhereClause('', address);
+    return await this.prisma.transaction.findMany({ where: whereClause });
+  }
+  
+  private buildWhereClause(contractAddress: string, address: string) {
+    if (contractAddress && address) {
+      return {
+        OR: [
+          { contractAddress: contractAddress, to: address },
+          { contractAddress: contractAddress, from: address },
+        ],
+      };
+    } else if (contractAddress) {
+      return { contractAddress: contractAddress };
+    } else if (address) {
+      return {
+        OR: [{ from: address }, { to: address }],
+      };
+    } else {
+      return {};
+    }
+  }
+  
+  private async buildCounterparties(addresses: string[], counts: { [key: string]: number }): Promise<Counterparty[]> {
+    const counterparties: Counterparty[] = [];
+    const uniqueAddresses = Array.from(new Set(addresses));
+  
+    for (const address of uniqueAddresses) {
+      const labels = await this.getLabels(address);
+      const name = labels.length > 0 ? labels[0].name ?? '' : '';
+      counterparties.push({
+        address,
+        name,
+        interactions: counts[address],
+      });
+    }
+  
+    return counterparties;
+  }
+
+  // async findERC20TransfersFromAddress(address: string): Promise<TokenTransfer[]> {
+  //   await this.updateTokenTransfers('', address, true);
+  //   try {
+  //     return await this.lookForAnyTokenTransfers(address);
+  //   } catch (error) {
+  //     console.error('Error fetching transactions:', error);
+  //     throw error;
+  //   }
+  // }
+
+  // async findERC20TransfersFromContract(contractaddress: string): Promise<TokenTransfer[]> {
+  //   await this.updateTokenTransfers(contractaddress, '', true);
+  //   try {
+  //     return await this.lookForAnyTokenTransfers(contractaddress);
+  //   } catch (error) {
+  //     console.error('Error fetching transactions:', error);
+  //     throw error;
+  //   }
+  // }
+
+  // async findTokenTransfersFromAddress(contractaddress: string, address: string): Promise<TokenTransfer[]> {
+  //   await this.updateTokenTransfers(contractaddress, address, true);
+  //   try {
+  //     return await this.lookForExactTokenTransfers(contractaddress, address);
+  //   } catch (error) {
+  //     console.error('Error fetching transactions:', error);
+  //     throw error;
+  //   }
+  // }
 
   // async lookForAnyTokenTransfers(address: string): Promise<TokenTransfer[]> {
   //   const chunkSize = 100000;
@@ -485,83 +585,6 @@ export class BlockchainService {
   //   console.log(`Fetched ${txs.length} token transfers from database`);
   //   return txs;
   // }
-
-  async collectAllContrparties(contractAddress: string, address: string): Promise<{ senders: AddressResponse[], receivers: AddressResponse[] }> {
-    const senders = new Set<string>();
-    const receivers = new Set<string>();
-
-    let transfers: TokenTransfer[];
-
-    if (contractAddress && address) {
-      transfers = await this.prisma.tokenTransfer.findMany({
-        where: {
-          OR: [
-            {
-              contractAddress: contractAddress,
-              to: address
-            },
-            {
-              contractAddress: contractAddress,
-              from: address
-            }
-          ],
-        },
-      });
-    } else if (contractAddress) {
-      transfers = await this.prisma.tokenTransfer.findMany({
-        where: {
-          contractAddress: contractAddress,
-        },
-      });
-    } else if (address) {
-      transfers = await this.prisma.tokenTransfer.findMany({
-        where: {
-          OR: [
-            { from: address },
-            { to: address }
-          ],
-        },
-      });
-    } else {
-      transfers = [];
-    }
-
-    for (const transfer of transfers) {
-      if (transfer.from === address) {
-        receivers.add(transfer.to);
-      }
-
-      if (transfer.to === address) {
-        senders.add(transfer.from);
-      }
-
-      if (transfer.from !== address && transfer.to !== address) {
-        receivers.add(transfer.to);
-        senders.add(transfer.from);
-      }
-    }
-
-    const sendersArray = await this.getAddressResponses(Array.from(senders));
-    const receiversArray = await this.getAddressResponses(Array.from(receivers));
-
-    return {
-      senders: sendersArray.sort((a, b) => a.address.localeCompare(b.address)),
-      receivers: receiversArray.sort((a, b) => a.address.localeCompare(b.address))
-    };
-  }
-
-  private async getAddressResponses(addresses: string[]): Promise<AddressResponse[]> {
-    const responses: AddressResponse[] = [];
-
-    for (const address of addresses) {
-      const labels = await this.getLabels(address);
-      const name = labels.length > 0 ? ((labels[0].name === null || typeof labels[0].name === 'undefined') ? '' : labels[0].name) : '';
-      if(name.length > 0) responses.push({ address, name });
-    }
-
-    return responses;
-  }
-
 
   // async collectAllContrparties(contractAddress: string, address: string): Promise<{ senders: string[], receivers: string[] }> {
   //   console.log('collectAllContrparties. contractAddress:', contractAddress, 'address:', address);

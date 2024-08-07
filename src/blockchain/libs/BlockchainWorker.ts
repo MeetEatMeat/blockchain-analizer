@@ -1,6 +1,5 @@
 import axios from 'axios';
-import { Transaction } from '../dto/transaction.dto';
-import { TokenTransfer } from '../dto/token-transfer.dto';
+import { ITransaction, ITokenTransfer } from '../dto/interactions.dto';
 import { NotFoundException } from '@nestjs/common/exceptions/not-found.exception';
 import { Label } from '../dto/labels.dto';
 
@@ -68,7 +67,7 @@ class BlockchainWorker {
         }
     }
 
-    async getTransactions(address: string, startblock: number, endblock: number, page: number, offset: number, sort: string): Promise<Transaction[]> {
+    async getTransactions(address: string, startblock: number, endblock: number, page: number, offset: number, sort: string): Promise<ITransaction[]> {
         try {
             const response = await axios.get(this.getNetwork(), {
                 params: {
@@ -97,8 +96,8 @@ class BlockchainWorker {
         }
     }
 
-    async fetchAllTransactions(address: string, startblock: number, endblock: number, page: number, offset: number, sort: string): Promise<Transaction[]> {
-        let transactions: Transaction[] = [];
+    async fetchAllTransactions(address: string, startblock: number, endblock: number, page: number, offset: number, sort: string): Promise<ITransaction[]> {
+        let transactions: ITransaction[] = [];
         let currentStartBlock = startblock;
         let currentEndBlock = endblock;
         let range = 0;
@@ -130,7 +129,7 @@ class BlockchainWorker {
         return transactions;
     }
 
-    async getTokenTransfers(contractaddress: string, address: string, startblock: number, endblock: number, page: number, offset: number, sort: string): Promise<TokenTransfer[]> {
+    async getTokenTransfers(contractaddress: string, address: string, startblock: number, endblock: number, page: number, offset: number, sort: string): Promise<ITokenTransfer[]> {
         try {
             let response;
             if(contractaddress && address){
@@ -191,8 +190,8 @@ class BlockchainWorker {
         }
     }
 
-    async fetchAllTokenTransfers(contractaddress: string, address: string, startblock: number, endblock: number, page: number, offset: number, sort: string): Promise<TokenTransfer[]> {
-        let tokenTransfers: TokenTransfer[] = [];
+    async fetchAllTokenTransfers(contractaddress: string, address: string, startblock: number, endblock: number, page: number, offset: number, sort: string): Promise<ITokenTransfer[]> {
+        let tokenTransfers: ITokenTransfer[] = [];
         let currentStartBlock = startblock;
         let currentEndBlock = endblock;
         let range = 0;
@@ -225,7 +224,7 @@ class BlockchainWorker {
         return tokenTransfers;
     }
 
-    private mapToTokenTransfer(item: any): TokenTransfer {
+    private mapToTokenTransfer(item: any): ITokenTransfer {
         return {
             hash: item.hash,
             blockNumber: item.blockNumber,
@@ -250,4 +249,4 @@ class BlockchainWorker {
     }
 }
 
-export { BlockchainWorker, Transaction, TokenTransfer };
+export { BlockchainWorker, ITransaction, ITokenTransfer };

@@ -1,6 +1,6 @@
-import { Transaction } from '../dto/transaction.dto';
+import { ITransaction } from '../dto/interactions.dto';
 
-export default async function checkAffiliates(transactions: Transaction[], range: number): Promise<string> {
+export default async function checkAffiliates(transactions: ITransaction[], range: number): Promise<string> {
     console.log('Analyzing affiliated addresses...\n');
     const fromAddresses: { [key: string]: number } = {};
 
