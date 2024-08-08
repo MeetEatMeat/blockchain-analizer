@@ -1,11 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BlockchainService } from '../../src/blockchain/blockchain.service';
 import { PrismaService } from '../../src/prisma.service';
-import { readAddressesFromCsv, saveCounterpartiesToCSV } from '../../src/blockchain/libs/CsvWorker';
+import { readAddressesFromCsv } from '../../src/blockchain/libs/CsvWorker';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
-import { ExportCounterparties } from 'src/blockchain/dto/interactions.dto';
+import { AddressCounterparties } from 'src/blockchain/dto/interactions.dto';
 
 dotenv.config();
 
@@ -31,21 +31,24 @@ async function main() {
     };
 
     // Collect counterparties
-    let result: ExportCounterparties;
-    try {
-        addresses.forEach(async (address) => {
-            console.log("Collecting counterparties for address: ", address);
-            await blockchainService.updateTokenTransfers('', address.toLowerCase(), true);
-            await blockchainService.updateTransactions(address.toLowerCase());
-            result = await blockchainService.collectAllCounterparties('', address.toLowerCase());
-            console.log("Senders found: ", result.senders);
-            console.log("Receivers found: ", result.receivers);
-            await saveCounterpartiesToCSV(result, reportsDirectory, `${address.slice(-6)}.csv`);
-        });
-    } catch (e) {
-        console.error('Error collecting counterparties: ', e);
-        process.exit(1);
+    const c: AddressCounterparties[] = [];
+
+    for (const address of addresses) {
+        console.log("Collecting counterparties for address: ", address);
+        console.log("Updating token transfers...");
+        await blockchainService.updateTokenTransfers('', address.toLowerCase(), true);
+
+        console.log("Updating transactions...");
+        await blockchainService.updateTransactions(address.toLowerCase());
+
+        console.log("Pushing found counterparties...");
+        const result = await blockchainService.collectAllCounterparties('', address.toLowerCase());
+        console.log("Counterparties found result: ", result.length);
+        c.push({ address: address.toLowerCase(), counterparties: result });
     }
+
+    console.log("Counterparties count: ", c.length);
+    console.log("Counterparties: ", c);
 }
 
 main().catch(e => {
@@ -53,13 +56,15 @@ main().catch(e => {
     process.exit(1);
 });
 
-// '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984' Uniswap Uni token
-// '0xb81d70802a816b5dacba06d708b5acf19dcd436d' Dextoken
-// '0x17aeea03942d24e5a8393513a3de08608b228939' Dextoken sender
-// '0x77cbb281905cceb2d0268dbb4035dd3446707795' Dextoken sender 2
-// '0x373f6cb03005afc7f928dfa41fad928fe60fcec6' Dextoken sender 3
-// '0xba12222222228d8ba445958a75a0704d566bf2c8' Balancer vault
-// '0xa1d0E215a23d7030842FC67cE582a6aFa3CCaB83' Yfii token
-// '0xfaba6f8e4a5e8ab82f62fe7c39859fa577269be3' ONDO token
-// '0x00000000000006b2ab6decbc6fc7ec6bd2fbc720' ONDO sender 1
-// '0x0000000000007f150bd6f54c40a34d7c3d5e9f56' ONDO sender 2
+// 0xDB044B8298E04D442FdBE5ce01B8cc8F77130e33 | Bitkub Hot Wallet 1
+// 0x3d1D8A1d418220fd53C18744d44c182C46f47468 | Bitkub Hot Wallet 2
+// 0x59E0cDA5922eFbA00a57794faF09BF6252d64126 | Bitkub Hot Wallet 3
+// 0x1579B5f6582C7a04f5fFEec683C13008C4b0A520 | Bitkub Hot Wallet 4
+// 0xB9C764114C5619a95d7f232594e3B8dDDF95b9CF | Bitkub Hot Wallet 5
+// 0xCa7404EED62a6976Afc335fe08044B04dBB7e97D | Bitkub Hot Wallet 6
+// 0x6254B927ecC25DDd233aAECD5296D746B1C006B4 | Bitkub Hot Wallet 7
+// 0x79169E7818968cD0C6DBd8929f24d797CC1Af9A1 | Bitkub Multisig 1
+// 0x0649Cef6D11ed6F88535462E147304d3FE5ae14D | KUB Token
+// 0xBC920c934B2b773F2e148d2dad38717c63757C69 | Bitkub Deployer
+// 0x49876520C866D138dd749d6C2C33e4DA5bfAeC66 | Bitkub Deposit Funder 2
+// 0x9be7B0f285d04701f27682F591a60417C47d095A | Bitkub Deposit Funder 1

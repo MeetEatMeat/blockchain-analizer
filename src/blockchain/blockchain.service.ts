@@ -4,7 +4,7 @@ import { Transaction, TokenTransfer, Prisma, Address, Label } from '@prisma/clie
 import checkAffiliates from './libs/analisys';
 import { BlockchainWorker } from './libs/blockchainWorker';
 import { Label as LabelType } from './dto/labels.dto';
-import { Counterparty, ExportCounterparties, Interaction, ITokenTransfer, ITransaction } from './dto/interactions.dto';
+import { Counterparty, Interaction, ITokenTransfer, ITransaction } from './dto/interactions.dto';
 
 @Injectable()
 export class BlockchainService {
@@ -177,7 +177,7 @@ export class BlockchainService {
     return parseInt(result === null ? '0' : result.blockNumber);
   }
 
-  async saveToTransactions(transactions: Transaction[]): Promise<void> {
+  async saveToTransactions(transactions: ITransaction[]): Promise<void> {
     for (const tx of transactions) {
       try {
         await this.prisma.transaction.create({
@@ -212,7 +212,7 @@ export class BlockchainService {
     }
   }
 
-  async lookForTransactions(address: string): Promise<Transaction[]>{
+  async lookForTransactions(address: string): Promise<ITransaction[]>{
     const chunkSize = 100000;
     const txs: any[] = [];
   
@@ -404,7 +404,7 @@ export class BlockchainService {
     return txs;
   }
   
-  async collectAllCounterparties(contractAddress: string, address: string): Promise<ExportCounterparties> {
+  async collectAllCounterparties(contractAddress: string, address: string): Promise<Counterparty[]> {
     const senders: string[] = [];
     const receivers: string[] = [];
     const sendersCount: { [key: string]: number } = {};
@@ -412,63 +412,49 @@ export class BlockchainService {
   
     const transfers = await this.getTransfers(contractAddress, address);
   
-    for (const transfer of transfers) {
-      if (transfer.from === address) {
-        receivers.push(transfer.to);
-        receiversCount[transfer.to] = (receiversCount[transfer.to] || 0) + 1;
-      }
-  
-      if (transfer.to === address) {
-        senders.push(transfer.from);
-        sendersCount[transfer.from] = (sendersCount[transfer.from] || 0) + 1;
-      }
-  
+    for (const transfer of transfers) { 
       if (transfer.from !== address && transfer.to !== address) {
         receivers.push(transfer.to);
         senders.push(transfer.from);
         receiversCount[transfer.to] = (receiversCount[transfer.to] || 0) + 1;
         sendersCount[transfer.from] = (sendersCount[transfer.from] || 0) + 1;
+      } else if (transfer.to === address) {
+        senders.push(transfer.from);
+        sendersCount[transfer.from] = (sendersCount[transfer.from] || 0) + 1;
+      } else if (transfer.from === address) {
+        receivers.push(transfer.to);
+        receiversCount[transfer.to] = (receiversCount[transfer.to] || 0) + 1;
       }
     }
-
+    console.log('collectAllCounterparties. Transfers found:', transfers.length);
+  
     const transactions = await this.getTransactions(address);
-
+  
     for (const transaction of transactions) {
       if (transaction.from === address) {
         receivers.push(transaction.to);
         receiversCount[transaction.to] = (receiversCount[transaction.to] || 0) + 1;
-      }
-  
-      if (transaction.to === address) {
+      } else if (transaction.to === address) {
         senders.push(transaction.from);
-        sendersCount[transaction.from] = (sendersCount[transaction.from] || 0) + 1;
-      }
-  
-      if (transaction.from !== address && transaction.to !== address) {
-        receivers.push(transaction.to);
-        senders.push(transaction.from);
-        receiversCount[transaction.to] = (receiversCount[transaction.to] || 0) + 1;
         sendersCount[transaction.from] = (sendersCount[transaction.from] || 0) + 1;
       }
     }
   
-    const sendersArray = await this.buildCounterparties(senders, sendersCount);
-    const receiversArray = await this.buildCounterparties(receivers, receiversCount);
+    const sendersArray = await this.buildCounterparties(senders, sendersCount, 'sender');
+    console.log('collectAllCounterparties. Senders:', sendersArray.length);
+    const receiversArray = await this.buildCounterparties(receivers, receiversCount, 'receiver');
+    console.log('collectAllCounterparties. Receivers:', receiversArray.length);
   
-    return {
-      senders: sendersArray.sort((a, b) => a.address.localeCompare(b.address)),
-      receivers: receiversArray.sort((a, b) => a.address.localeCompare(b.address)),
-    };
+    return [...sendersArray, ...receiversArray];
   }
   
-  private async getTransfers(contractAddress: string, address: string): Promise<TokenTransfer[]> {
+  private async getTransfers(contractAddress: string, address: string): Promise<ITokenTransfer[]> {
     const whereClause = this.buildWhereClause(contractAddress, address);
     return await this.prisma.tokenTransfer.findMany({ where: whereClause });
   }
 
-  private async getTransactions(address: string): Promise<Transaction[]> {
-    const whereClause = this.buildWhereClause('', address);
-    return await this.prisma.transaction.findMany({ where: whereClause });
+  private async getTransactions(address: string): Promise<ITransaction[]> {
+    return await this.lookForTransactions(address);
   }
   
   private buildWhereClause(contractAddress: string, address: string) {
@@ -490,9 +476,11 @@ export class BlockchainService {
     }
   }
   
-  private async buildCounterparties(addresses: string[], counts: { [key: string]: number }): Promise<Counterparty[]> {
+  private async buildCounterparties(addresses: string[], counts: { [key: string]: number }, type: 'sender' | 'receiver'): Promise<Counterparty[]> {
     const counterparties: Counterparty[] = [];
     const uniqueAddresses = Array.from(new Set(addresses));
+    console.log(`buildCounterparties. addresses ${type === 'sender' ? 'senders' : 'receivers'}: ${addresses.length}`);
+    console.log("Unique addresses:", uniqueAddresses.length);
   
     for (const address of uniqueAddresses) {
       const labels = await this.getLabels(address);
@@ -501,9 +489,10 @@ export class BlockchainService {
         address,
         name,
         interactions: counts[address],
+        type,
       });
     }
-  
+    console.log(`buildCounterparties. ${type === 'sender' ? 'Senders' : 'Receivers'}: ${counterparties.length}`);
     return counterparties;
   }
 

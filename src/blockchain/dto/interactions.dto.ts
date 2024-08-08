@@ -32,19 +32,26 @@ type Interaction = ITokenTransfer | ITransaction;
 
 type Counterparty = {
     address: string;
+    type: 'sender' | 'receiver';
     name?: string;
     interactions?: number;
 };
 
-type ExportCounterparties = { 
-    senders: Counterparty[];
-    receivers: Counterparty[];
+type AddressCounterparties = {
+    address: string;
+    counterparties: Counterparty[];
+  };
+
+interface TransferResult {
+    senders: string[];
+    receivers: string[];
 }
 
 export { 
     Counterparty, 
-    ExportCounterparties, 
     ITokenTransfer, 
     ITransaction,
-    Interaction
+    Interaction,
+    TransferResult,
+    AddressCounterparties
 };
