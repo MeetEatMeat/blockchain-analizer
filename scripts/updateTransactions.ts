@@ -15,10 +15,10 @@ async function main(address: string) {
     const countBefore = await blockchainService.getTransactionsCount();
     await blockchainService.updateTransactions(address);
     const countAfter = await blockchainService.getTransactionsCount();
-    console.log(`Number of token transfers before: ${countBefore} Number of token transfers after: ${countAfter}`);
+    console.log(`Number of transactions before: ${countBefore} Number of transactions after: ${countAfter}`);
 }
 
-main('0xfaba6f8e4a5e8ab82f62fe7c39859fa577269be3').catch(e => {
+main('0xDB044B8298E04D442FdBE5ce01B8cc8F77130e33').catch(e => {
     console.error(e);
     process.exit(1);
 });

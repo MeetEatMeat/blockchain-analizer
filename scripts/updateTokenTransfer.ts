@@ -12,19 +12,13 @@ async function main(contractaddress: string, address: string) {
 
     const blockchainService = module.get<BlockchainService>(BlockchainService);
 
-    // const counBefore = await blockchainService.getTokenTransferCount();
-    // await blockchainService.updateTokenTransfers(contractaddress, address, true);
-    // const countAfter = await blockchainService.getTokenTransferCount();
-    // console.log(`Number of token transfers before: ${counBefore} Number of token transfers after: ${countAfter}`);
-    const worker = await blockchainService.getWorker();
-    const startBlock = await blockchainService.getLatestTokenTransferInDB(contractaddress, address);
-    console.log('updateTokenTransfers.Start block:', startBlock);
-    const latestBlock = await worker.getLatestBlock();
-    const tokenTransfers = await worker.fetchAllTokenTransfers(contractaddress, address, startBlock, latestBlock, 1, 10000, 'asc');
-
+    const countBefore = await blockchainService.getTokenTransferCount();
+    await blockchainService.updateTokenTransfers(contractaddress, address);
+    const countAfter = await blockchainService.getTokenTransferCount();
+    console.log(`Number of token transfers before: ${countBefore} Number of token transfers after: ${countAfter}`);
 }
 
-main('', '').catch(e => {
+main('', '0xb9c764114c5619a95d7f232594e3b8dddf95b9cf').catch(e => {
     console.error(e);
     process.exit(1);
 });

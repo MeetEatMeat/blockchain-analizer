@@ -135,6 +135,19 @@ export class BlockchainService {
     }
   }
 
+  async forceUpdateTransactions(address: string): Promise<Transaction[]> {
+    const startBlock = 0;
+    console.log('updateTransactions. Start block:', startBlock);
+    const latestBlock = await this.worker.getLatestBlock();
+    console.log('updateTransactions. Latest block:', latestBlock);
+
+    const transactions = await this.worker.fetchAllTransactions(address, 0, latestBlock, 1, 10000, 'asc');
+    console.log('updateTransactions. Transactions:', transactions.length);
+    await this.saveToTransactions(transactions);
+
+    return transactions;
+  }
+
   async updateTransactions(address: string): Promise<Transaction[]> {
     const startBlock = await this.transactionsGetLatestBlockInDB(address);
     console.log('updateTransactions. Start block:', startBlock);
@@ -178,6 +191,7 @@ export class BlockchainService {
   }
 
   async saveToTransactions(transactions: ITransaction[]): Promise<void> {
+    console.log('saveToTransactions. Transactions:', transactions.length);
     for (const tx of transactions) {
       try {
         await this.prisma.transaction.create({
@@ -276,9 +290,20 @@ export class BlockchainService {
   // that address. ContractAddress (token) is arbitrary
   // If both contractAddress and address are placed, it will fetch all transfers of that token 
   // from that address OR to that address.
+  async forceUpdateTokenTransfers(contractaddress: string, address: string, store: boolean = true): Promise<TokenTransfer[]> {
+    const startBlock = 0
+    console.log('updateTokenTransfers.Start block:', startBlock);
+    const latestBlock = await this.worker.getLatestBlock();
+
+    const tokenTransfers = await this.worker.fetchAllTokenTransfers(contractaddress, address, 0, latestBlock, 1, 10000, 'asc');
+    if (store){
+      await this.saveToTokenTransfers(tokenTransfers);
+    }
+    return tokenTransfers;
+  }
+
   async updateTokenTransfers(contractaddress: string, address: string, store: boolean = true): Promise<TokenTransfer[]> {
     const startBlock = await this.getLatestTokenTransferInDB(contractaddress, address);
-    // const startBlock = 0;
     console.log('updateTokenTransfers.Start block:', startBlock);
     const latestBlock = await this.worker.getLatestBlock();
 
@@ -356,6 +381,7 @@ export class BlockchainService {
   }
 
   async saveToTokenTransfers(tokenTransfers: TokenTransfer[]): Promise<void> {
+    console.log('saveToTokenTransfers. Token transfers:', tokenTransfers.length);
     for (const tx of tokenTransfers) {
       try {
         await this.prisma.tokenTransfer.create({
@@ -446,6 +472,37 @@ export class BlockchainService {
     console.log('collectAllCounterparties. Receivers:', receiversArray.length);
   
     return [...sendersArray, ...receiversArray];
+  }
+
+  async collectAllUniqueAddresses(contractAddress: string, address: string): Promise<string[]> {
+    const uniqueAddresses = new Set<string>();
+  
+    const transfers = await this.getTransfers(contractAddress, address);
+    console.log('collectAllUniqueAddresses. Transfers found:', transfers.length);
+  
+    for (const transfer of transfers) {
+      if (transfer.from !== address && transfer.to !== address) {
+        uniqueAddresses.add(transfer.from);
+        uniqueAddresses.add(transfer.to);
+      } else if (transfer.from !== address) {
+        uniqueAddresses.add(transfer.from);
+      } else if (transfer.to !== address) {
+        uniqueAddresses.add(transfer.to);
+      }
+    }
+  
+    const transactions = await this.getTransactions(address);
+    console.log('collectAllUniqueAddresses. Transactions found:', transactions.length);
+  
+    for (const transaction of transactions) {
+      if (transaction.from !== address) {
+        uniqueAddresses.add(transaction.from);
+      } else if (transaction.to !== address) {
+        uniqueAddresses.add(transaction.to);
+      }
+    }
+  
+    return Array.from(uniqueAddresses);
   }
   
   private async getTransfers(contractAddress: string, address: string): Promise<ITokenTransfer[]> {

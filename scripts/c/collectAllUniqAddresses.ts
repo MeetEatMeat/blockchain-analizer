@@ -23,32 +23,42 @@ async function main() {
     // Get addresses from CSV
     let addresses: string[] = [];
     try {
-        addresses = await readAddressesFromCsv(path.join(__dirname, './inputs/addresses.csv'));
+        addresses = await readAddressesFromCsv(path.join(__dirname, '../../inputs/addresses.csv'));
         console.log("Addresses found: ", addresses);
     } catch (e) {
         console.error('Error reading addresses from CSV: ', e);
         process.exit(1);
     };
 
-    // Collect counterparties
-    const c: AddressCounterparties[] = [];
+    // Collect unique addresses
+    let allUniqueAddresses: string[] = [];
+    const addressSummary: { [key: string]: number } = {};
 
     for (const address of addresses) {
-        console.log("Collecting counterparties for address: ", address);
-        console.log("Updating token transfers...");
-        await blockchainService.updateTokenTransfers('', address.toLowerCase(), true);
+        console.log("Pushing found addresses...");
+        const result = await blockchainService.collectAllUniqueAddresses('', address.toLowerCase());
+        console.log("Unique addresses found: ", result.length);
 
-        console.log("Updating transactions...");
-        await blockchainService.updateTransactions(address.toLowerCase());
-
-        console.log("Pushing found counterparties...");
-        const result = await blockchainService.collectAllCounterparties('', address.toLowerCase());
-        console.log("Counterparties found result: ", result.length);
-        c.push({ address: address.toLowerCase(), counterparties: result });
+        allUniqueAddresses = allUniqueAddresses.concat(result);
+        addressSummary[address] = result.length;
     }
 
-    console.log("Counterparties count: ", c.length);
-    console.log("Counterparties: ", c);
+    const uniqueAddressesSet = new Set(allUniqueAddresses.filter(addr => addr !== '0x0000000000000000000000000000000000000000'));
+    const uniqueAddressesArray = Array.from(uniqueAddressesSet);
+    console.log("Unique addresses total count: ", uniqueAddressesArray.length);
+    console.log("Unique addresses sample: ", uniqueAddressesArray.slice(0, 50));
+
+    console.log("Summary of unique addresses found per input address:");
+    for (const [address, count] of Object.entries(addressSummary)) {
+        console.log(`Address: ${address}, Unique addresses found: ${count}`);
+    }
+
+    // Save unique addresses to file
+    const filePath = path.join(__dirname, '../../outputs', 'unique_addresses.txt');
+    fs.writeFileSync(filePath, JSON.stringify(uniqueAddressesArray, null, 2), 'utf-8');
+
+    console.log("Unique addresses saved to outputs/unique_addresses.txt");
+
 }
 
 main().catch(e => {

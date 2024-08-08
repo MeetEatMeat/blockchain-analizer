@@ -203,7 +203,7 @@ class BlockchainWorker {
             if (txs.length < 10000) {
                 tokenTransfers = tokenTransfers.concat(txs);
                 // console.log("Fetched transactions: ", txs);
-                console.log(`Fetched ${txs.length} transactions from blocks ${currentStartBlock} to ${currentEndBlock} Block range: ${range} Total transactions: ${tokenTransfers.length}`);
+                console.log(`Fetched ${txs.length} token transfers from blocks ${currentStartBlock} to ${currentEndBlock} Block range: ${range} Total token transfers: ${tokenTransfers.length}`);
                 if (currentEndBlock === endblock) {
                     break;
                 }
