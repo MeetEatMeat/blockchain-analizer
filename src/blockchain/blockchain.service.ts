@@ -43,26 +43,28 @@ export class BlockchainService {
   }
 
   async getLabels(address: string): Promise<LabelType[]> {
-    const labelsFromDb = await this.loadLabels(address);
+    let labelsFromDb: LabelType[] = [];
+    labelsFromDb = await this.loadLabels(address);
+    return labelsFromDb;
 
-    if (labelsFromDb.length > 0) {
-      return labelsFromDb;
-    }
+    // if (labelsFromDb.length > 0) {
+    //   return labelsFromDb;
+    // }
 
-    try {
-      const labelsFromApi = await this.worker.getLabels(address);
-      console.log("Requesting labels from API for:", address);
+    // try {
+    //   const labelsFromApi = await this.worker.getLabels(address);
+    //   console.log("Requesting labels from API for:", address);
 
-      if (labelsFromApi.length > 0) {
-        await this.storeLabels(labelsFromApi, address);
-        return labelsFromApi;
-      }
+    //   if (labelsFromApi.length > 0) {
+    //     await this.storeLabels(labelsFromApi, address);
+    //     return labelsFromApi;
+    //   }
 
-      return [];
-    } catch (error) {
-      console.error('Error fetching labels:', error);
-      throw error;
-    }
+    //   return [];
+    // } catch (error) {
+    //   console.error('Error fetching labels:', error);
+    //   throw error;
+    // }
   }
 
   async loadLabels(address: string): Promise<LabelType[]> {

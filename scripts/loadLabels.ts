@@ -23,7 +23,7 @@ async function main(address: string) {
     console.log(foundLabels);
 }
 
-main('0x1f9840a85d5af5bf1d1762f925bdaddc4201f984').catch(e => {
+main('0xb81d70802a816b5dacba06d708b5acf19dcd436d').catch(e => {
     console.error(e);
     process.exit(1);
 });
