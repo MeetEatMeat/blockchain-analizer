@@ -129,6 +129,15 @@ class BlockchainWorker {
         return transactions;
     }
 
+    async fetchLowProfileTransactions(address: string, startblock: number, endblock: number, page: number, offset: number, sort: string): Promise<ITransaction[]> {
+        const txs = await this.getTransactions(address, startblock, endblock, page, offset, sort);
+        if(txs.length === 10000){
+            return [];
+        }
+        console.log(`Fetched ${txs.length} transactions from blocks ${startblock} to ${endblock}`);
+        return txs;
+    }
+
     async getTokenTransfers(contractaddress: string, address: string, startblock: number, endblock: number, page: number, offset: number, sort: string): Promise<ITokenTransfer[]> {
         try {
             let response;
@@ -222,6 +231,15 @@ class BlockchainWorker {
         }
 
         return tokenTransfers;
+    }
+
+    async fetchLowProfileTokenTransfers(contractaddress: string, address: string, startblock: number, endblock: number, page: number, offset: number, sort: string): Promise<ITokenTransfer[]> {
+        const txs = await this.getTokenTransfers(contractaddress, address, startblock, endblock, page, offset, sort);
+        if(txs.length === 10000){
+            return [];
+        }
+        console.log(`Fetched ${txs.length} token transfers from blocks ${startblock} to ${endblock}`);
+        return txs;
     }
 
     private mapToTokenTransfer(item: any): ITokenTransfer {

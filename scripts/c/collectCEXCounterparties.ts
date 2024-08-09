@@ -15,7 +15,7 @@ async function main() {
     }).compile();
 
     const blockchainService = module.get<BlockchainService>(BlockchainService);
-    const reportsDirectory = path.join(__dirname, './outputs');
+    const reportsDirectory = path.join(__dirname, '../../outputs');
     if (!fs.existsSync(reportsDirectory)) {
         fs.mkdirSync(reportsDirectory, { recursive: true });
     }

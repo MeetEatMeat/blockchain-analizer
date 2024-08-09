@@ -141,7 +141,7 @@ export class BlockchainService {
     const latestBlock = await this.worker.getLatestBlock();
     console.log('updateTransactions. Latest block:', latestBlock);
 
-    const transactions = await this.worker.fetchAllTransactions(address, 0, latestBlock, 1, 10000, 'asc');
+    const transactions = await this.worker.fetchLowProfileTransactions(address, 0, latestBlock, 1, 10000, 'asc');
     console.log('updateTransactions. Transactions:', transactions.length);
     await this.saveToTransactions(transactions);
 
@@ -218,7 +218,7 @@ export class BlockchainService {
         });
       } catch (error) {
         if (error.code === 'P2002') {
-          console.log(`Duplicate transaction found: ${tx.hash}`);
+          // console.log(`Duplicate transaction found: ${tx.hash}`);
         } else {
           throw error;
         }
@@ -295,7 +295,7 @@ export class BlockchainService {
     console.log('updateTokenTransfers.Start block:', startBlock);
     const latestBlock = await this.worker.getLatestBlock();
 
-    const tokenTransfers = await this.worker.fetchAllTokenTransfers(contractaddress, address, 0, latestBlock, 1, 10000, 'asc');
+    const tokenTransfers = await this.worker.fetchLowProfileTokenTransfers(contractaddress, address, 0, latestBlock, 1, 10000, 'asc');
     if (store){
       await this.saveToTokenTransfers(tokenTransfers);
     }
