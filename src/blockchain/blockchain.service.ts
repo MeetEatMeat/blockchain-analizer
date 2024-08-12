@@ -250,6 +250,32 @@ export class BlockchainService {
     return txs;
   }
 
+  async lookForArrayTransactions(addresses: string[]): Promise<ITransaction[]> {
+    const chunkSize = 100000;
+    const txs: any[] = [];
+
+    while (true) {
+        const chunk = await this.prisma.transaction.findMany({
+            where: {
+                to: {
+                    in: addresses
+                }
+            },
+            skip: txs.length,
+            take: chunkSize,
+        });
+
+        txs.push(...chunk);
+        console.log(`Fetched ${txs.length} transactions from database`);
+
+        if (chunk.length === 0) {
+            break;
+        }
+    }
+
+    return txs;
+}
+
   ///////////////////////////////////////////////////////////////////////////////////////
   // TOKEN TRANSFERS
   ///////////////////////////////////////////////////////////////////////////////////////

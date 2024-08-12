@@ -59,36 +59,27 @@ async function main(contractaddress: string) {
         progress = JSON.parse(progressData).progress;
     }
 
-    const latestBlock = 99999999;
-    const network = 'https://api.etherscan.io/api'
-
     const txArray: ITransaction[] = [];
     const ttArray: ITokenTransfer[] = [];
-    const startBlock = 0;
-    
-    const page = 1;
-    const offset = 10000;
-    const sort = 'asc';
 
-    for (let i = 22795; i < uniqueAddresses.length; i++) {
+    for (let i = 50000; i < 60000; i++) {
         const address = uniqueAddresses[i];
-        console.log(`Collecting data for address ${i + 1}/${uniqueAddresses.length}: ${address}`);
 
         try {
-            const response = await axios.get(network, {
+            const response = await axios.get('https://api.etherscan.io/api', {
                 params: {
                     module: 'account',
                     action: 'txlist',
                     address: address,
-                    startblock: startBlock,
-                    endblock: latestBlock,
-                    page: page,
-                    offset: offset,
-                    sort: sort,
+                    startblock: 0,
+                    endblock: 99999999,
+                    page: 1,
+                    offset: 10000,
+                    sort: 'asc',
                     apikey: apikey
                 }
             });
-
+            console.log(`Data for ${i + 1}/${uniqueAddresses.length}: ${address} txs: ${response.data.result.length}`);
             const txresult = response.data;
             if (txresult.status === '1') {
                 txArray.push(...txresult.result);
@@ -100,16 +91,16 @@ async function main(contractaddress: string) {
         }
 
         try {
-            const response = await axios.get(network, {
+            const response = await axios.get('https://api.etherscan.io/api', {
                 params: {
                     module: 'account',
                     action: 'tokentx',
                     address: address,
-                    startblock: startBlock,
-                    endblock: latestBlock,
-                    page: page,
-                    offset: offset,
-                    sort: sort,
+                    startblock: 0,
+                    endblock: 99999999,
+                    page: 1,
+                    offset: 10000,
+                    sort: 'asc',
                     apikey: apikey
                 }
             });

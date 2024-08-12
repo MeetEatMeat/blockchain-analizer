@@ -5,7 +5,7 @@ import { readAddressesFromCsv } from '../../src/blockchain/libs/CsvWorker';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
-import { AddressCounterparties } from 'src/blockchain/dto/interactions.dto';
+import { ITransaction } from 'src/blockchain/dto/interactions.dto';
 
 dotenv.config();
 
@@ -20,31 +20,36 @@ async function main() {
         fs.mkdirSync(reportsDirectory, { recursive: true });
     }
 
-    // Get addresses from CSV
     let addresses: string[] = [];
     try {
-        addresses = await readAddressesFromCsv(path.join(__dirname, '../../inputs/addresses.csv'));
+        addresses = (await readAddressesFromCsv(
+            path.join(__dirname, '../../inputs/bitkub_addresses.csv'))).map(addr => addr.toLowerCase());
         console.log("Addresses found: ", addresses);
     } catch (e) {
         console.error('Error reading addresses from CSV: ', e);
         process.exit(1);
-    };
-
-    // Collect unique addresses
-    let allUniqueAddresses: string[] = [];
-    const addressSummary: { [key: string]: number } = {};
-
-    for (const address of addresses) {
-        console.log("Pushing found addresses...");
-        const result = await blockchainService.collectAllUniqueAddresses('', address.toLowerCase());
-        console.log("Unique addresses found: ", result.length);
-
-        allUniqueAddresses = allUniqueAddresses.concat(result);
-        addressSummary[address] = result.length;
     }
 
-    const uniqueAddressesSet = new Set(allUniqueAddresses.filter(addr => addr !== '0x0000000000000000000000000000000000000000'));
-    const uniqueAddressesArray = Array.from(uniqueAddressesSet);
+    const chunkSize = 1000;
+
+    const addressSummary: { [key: string]: number } = {};
+    const allUniqueAddresses = new Set<string>();
+
+    for (let i = 0; i < addresses.length; i += chunkSize) {
+        const chunk = addresses.slice(i, i + chunkSize);
+        console.log(`Processing chunk ${i / chunkSize + 1}: Addresses ${i} to ${i + chunkSize}`);
+
+        const result = await collectAllUniqueAddresses(blockchainService, chunk);
+        console.log("Unique addresses found: ", result.length);
+
+        result.forEach(addr => allUniqueAddresses.add(addr));
+
+        chunk.forEach(addr => {
+            addressSummary[addr] = (addressSummary[addr] || 0) + result.length;
+        });
+    }
+
+    const uniqueAddressesArray = Array.from(allUniqueAddresses).filter(addr => addr !== '0x0000000000000000000000000000000000000000');
     console.log("Unique addresses total count: ", uniqueAddressesArray.length);
     console.log("Unique addresses sample: ", uniqueAddressesArray.slice(0, 50));
 
@@ -53,18 +58,65 @@ async function main() {
         console.log(`Address: ${address}, Unique addresses found: ${count}`);
     }
 
-    // Save unique addresses to file
     const filePath = path.join(__dirname, '../../outputs', 'unique_addresses.txt');
     fs.writeFileSync(filePath, JSON.stringify(uniqueAddressesArray, null, 2), 'utf-8');
 
     console.log("Unique addresses saved to outputs/unique_addresses.txt");
-
 }
 
 main().catch(e => {
     console.error(e);
     process.exit(1);
 });
+
+async function collectAllUniqueAddresses(blockchainService: BlockchainService, addresses: string[]): Promise<string[]> {
+    const uniqueAddresses = new Set<string>();
+
+    const transactions = await blockchainService.lookForArrayTransactions(addresses);
+    console.log('collectAllUniqueAddresses. Transactions found:', transactions.length);
+
+    for (const transaction of transactions) {
+        if (!addresses.includes(transaction.from)) {
+            uniqueAddresses.add(transaction.from);
+        }
+
+        if (!addresses.includes(transaction.to)) {
+            uniqueAddresses.add(transaction.to);
+        }
+    }
+
+    return Array.from(uniqueAddresses);
+}
+
+
+
+// private async getTransfers(contractAddress: string, address: string): Promise<ITokenTransfer[]> {
+//     const whereClause = this.buildWhereClause(contractAddress, address);
+//     return await this.prisma.tokenTransfer.findMany({ where: whereClause });
+//   }
+
+//   private async getTransactions(address: string): Promise<ITransaction[]> {
+//     return await this.lookForTransactions(address);
+//   }
+  
+//   private buildWhereClause(contractAddress: string, address: string) {
+//     if (contractAddress && address) {
+//       return {
+//         OR: [
+//           { contractAddress: contractAddress, to: address },
+//           { contractAddress: contractAddress, from: address },
+//         ],
+//       };
+//     } else if (contractAddress) {
+//       return { contractAddress: contractAddress };
+//     } else if (address) {
+//       return {
+//         OR: [{ from: address }, { to: address }],
+//       };
+//     } else {
+//       return {};
+//     }
+//   }
 
 // 0xDB044B8298E04D442FdBE5ce01B8cc8F77130e33 | Bitkub Hot Wallet 1
 // 0x3d1D8A1d418220fd53C18744d44c182C46f47468 | Bitkub Hot Wallet 2
