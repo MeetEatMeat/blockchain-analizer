@@ -4,7 +4,23 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { readAddressesFromCsv } from '../src/blockchain/libs/CsvWorker';
 dotenv.config();
+/*
+This script uses the `processAddress()` function to take addresses from the `requestAddresses` array, 
+which is a list of sanctioned addresses, and requests transactions for each address in the list. 
+The `processAddress()` function then takes the first transaction, checks whether it was incoming or outgoing, 
+and recursively calls itself to request transactions from the address that was either the sender or the recipient, 
+depending on the direction, while preserving the direction.
 
+For each transaction, the sender's or recipient's address is checked against the `csvAddresses` list, 
+which is a list of Bitkub exchange addresses. At each level of recursion, 
+the current transaction is stored in the `txPath` tuple at the position determined by the `depth` variable, 
+which increments by 1 with each recursive call. This way, for each current transaction, 
+the `txPath` variable stores the entire path leading up to it.
+
+If an address from the `csvAddresses` list is found in the `to` or `from` field of the current transaction, 
+the entire path—the entire chain of transactions stored in the `txPath` variable—is saved in the `results` variable, 
+and the function returns to the previous recursion level. The next transaction is then examined.
+*/
 async function getTransactionList() {
     const reportsDirectory = path.join(__dirname, '../outputs');
     if (!fs.existsSync(reportsDirectory)) {
@@ -64,10 +80,7 @@ async function getTransactionList() {
         direction: 'forward' | 'backward' | 'start', 
         timestamp: number) 
         {
-        // if (depth > MAX_DEPTH) {
-        //     console.log(`Depth ${depth} is greater than the maximum depth. Skipping...`);
-        //     return;
-        // }
+
         if (direction !== 'start' && requestAddressSet.has(address)) {
             console.log(`Address ${address} is in the Bad list. Skipping...`);
             return;
