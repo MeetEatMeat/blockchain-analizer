@@ -68,6 +68,12 @@ const reports_directory = path.join(__dirname, '../outputs/btc_reports');
 const mid_reports_directory = path.join(reports_directory, './mid_reports');
 const final_report_path = path.join(reports_directory, 'bad_btc_txs_trace.json');
 const MAX_DEPTH = 2;
+const transactionCache = new Map<string, Set<ITransaction>>();
+const results: Result[] = [];
+const visitedForwardAddresses = new Set<string>();
+const visitedBackwardAddresses = new Set<string>();
+const txPath: ITransaction[] = Array(MAX_DEPTH + 1).fill(null);
+let totalTransactions = 0;
 
 async function getTransactionList() {
     await _checkDirectories();
@@ -78,12 +84,6 @@ async function getTransactionList() {
     const targetAddressSet = new Set(targetAddresses.map(addr => addr));
     const requestAddressSet = new Set(requestAddresses.map(addr => addr));
 
-    const transactionCache = new Map<string, Set<ITransaction>>();
-    const results: Result[] = [];
-    const visitedForwardAddresses = new Set<string>();
-    const visitedBackwardAddresses = new Set<string>();
-    const txPath: ITransaction[] = Array(MAX_DEPTH + 1).fill(null);
-    let totalTransactions = 0;
     let position = '';
 
     ////////////////////
@@ -91,155 +91,156 @@ async function getTransactionList() {
     ////////////////////
     for (let i = 0; i < requestAddresses.length; i++) {
         position = `Current position: ${i + 1}/${requestAddresses.length}`;
-        await processAddress(position, requestAddresses[i], 0, 'start', 0);
-    }
-
-    async function processAddress(
-        position: string, 
-        prevLvlAddress: string, 
-        depth: number,
-        direction: 'forward' | 'backward' | 'start', 
-        transactionTime: number
-    ) {
-        console.log(`Processing address ${prevLvlAddress} | Depth: ${depth} | Direction: ${direction}`);
-        // We should process addresses from request list only on the first level
-        if (direction !== 'start' && requestAddressSet.has(prevLvlAddress)) {
-            console.log(`Address ${prevLvlAddress} is in the Bad list. Skipping...`);
-            return;
-        }
-
-        // This address already visited in the forward direction
-        if (direction === 'forward' && visitedForwardAddresses.has(prevLvlAddress)) {
-            console.log(`Address ${prevLvlAddress} already visited forward. Skipping...`);
-            return;
-        } else if (direction === 'backward' && visitedBackwardAddresses.has(prevLvlAddress)) {
-            console.log(`Address ${prevLvlAddress} already visited backward. Skipping...`);
-            return;
-        }
-
-        if (direction === 'forward') {
-            visitedForwardAddresses.add(prevLvlAddress);
-        } else if (direction === 'backward') {
-            visitedBackwardAddresses.add(prevLvlAddress);
-        }
-
-        // If we have transactions for this address in the cache, we use them
-        const result = await _getTransactions(prevLvlAddress);
-        if(!Array.isArray(result)) {
-            console.log(`Error fetching transactions for ${prevLvlAddress}. Retrying...`);
-            await processAddress(position, prevLvlAddress, depth, direction, transactionTime);
-            return;
-        }
-
-        const transactions = await _sortnfilterTransactions(result, transactionTime, direction);
-
-    
-        for (const tx of transactions) {
-            console.log(`Processing txs`);
-            if (direction === 'forward' && Number(tx.transactionTime) <= transactionTime) {
-                console.log(`Transaction ${tx.txId} is older than the previous transaction. Direction ${direction}. Skipping...`);
-                continue;
-            } else if (direction === 'backward' && Number(tx.transactionTime) >= transactionTime) {
-                console.log(`Transaction ${tx.txId} is newer than the previous transaction. Direction ${direction}. Skipping...`);
-                continue;
-            }
-
-            totalTransactions++;
-    
-            console.log(`Processing tx for ${prevLvlAddress} | Total: ${totalTransactions} | ${position} | Tuple length: ${txPath.length} | Depth: ${depth} | Bad txs: ${results.length} | ${direction} | ${tx.transactionTime}`);
-
-            await _prepareRecursion(direction, tx);
-        }
-
-        async function _getTransactions(address: string, transactionCache: Map<string, Set<ITransaction>>): Promise<ITransaction[]> {
-            if (transactionCache.has(address)) {
-                // console.log("_getTransactions. First if");
-                const txs = Array.from(transactionCache.get(address)!);
-                console.log(`Transactions for ${address} found in cache. Total: ${txs.length}`);
-                return txs;
-            } else {
-                // console.log("_getTransactions. Second if");
-                let pages = 1;
-                let txs: ITransaction[] = [];
-                console.log("OkLink requesting...");
-                for(let i = 0; i <= pages; i++) {
-                    // await new Promise(resolve => setTimeout(resolve, 1000));
-                    let response = await requestTxList_OkLink(address, i + 1);
-                    console.log(`Requesting data for address: ${address} | Page: ${i + 1}`);
-                    if (response === null || response === undefined || response.code !== '0') {
-                        console.log(`Retrying request for address ${address} due to unsuccessful status or null response...`);
-                        if (direction === 'forward'){
-                            visitedForwardAddresses.delete(address);
-                        } else if (direction === 'backward'){
-                            visitedBackwardAddresses.delete(address);
-                        }
-                        await processAddress(position, address, depth, direction, transactionTime);
-                        return;
-                    }
-                    // if (Number(response.data[0].totalPage) > 10) {
-                    //     console.log(`${address} is probably an exchange address. Skipping...`);
-                    //     return;
-                    // }
-                    txs = txs.concat(response.data[0].transactionLists);
-                    if(pages === 1) pages = Number(response.data[0].totalPage);
-                }
-                // console.log("Transaction list: ", txs.length);
-                transactionCache.set(address, new Set(txs));
-                // console.log("_getTransactions. Txs: ", txs.length);
-                return txs;
-            }
-        }
-
-        async function _prepareRecursion(dir: 'forward' | 'backward' | 'start', tx: ITransaction) {
-            // console.log(`Preparing recursion on depth: ${depth} | ${dir} | to: ${tx.to}, from: ${tx.from}`);
-
-            let nextHopDirection = dir;
-            if(dir === 'start'){
-                if(tx.to.includes(prevLvlAddress)){
-                    nextHopDirection = 'backward';
-                } else if(tx.from.includes(prevLvlAddress)){
-                    nextHopDirection = 'forward';
-                }
-            }
-
-            let uniqueAddresses: string[] = [];
-            if(nextHopDirection === 'forward'){
-                uniqueAddresses = Array.from(new Set(tx.to.split(',')));
-            } else if(nextHopDirection === 'backward'){
-                uniqueAddresses = Array.from(new Set(tx.from.split(',')));
-            }
-
-            txPath[depth] = tx;
-            
-            if (depth < MAX_DEPTH) {
-                for (let i = depth + 1; i <= MAX_DEPTH; i++) {
-                    txPath[i] = null;
-                }
-            }
-
-            for (const addr of uniqueAddresses) {
-                if (targetAddressSet.has(addr)) {
-                    results.push({ path: txPath });
-                    console.log(`Bad transaction found for ${addr}: `, tx);
-                    console.log(`Total bad transactions found: ${results.length}`);
-        
-                    saveStackToFile(txPath, mid_reports_directory);
-                    continue;
-                }
-                if (depth < MAX_DEPTH) {
-                    await processAddress(position, addr, depth + 1, nextHopDirection, Number(tx.transactionTime));
-                }
-            }
-        }
-    }
-
-    async function saveStackToFile(stack: ITransaction[], directory: string) {
-        const stackFilePath = path.join(directory, `stack_${Date.now()}.json`);
-        fs.writeFileSync(stackFilePath, JSON.stringify(stack, null, 2), 'utf-8');
-        console.log(`Stack saved to ${stackFilePath}`);
+        await processAddress(position, requestAddresses[i], 0, 'start', 0, targetAddressSet, requestAddressSet);
     }
 
     _finalizeResults(totalTransactions, position, results);
+}
+
+async function processAddress(
+    position: string, 
+    prevLvlAddress: string, 
+    depth: number,
+    direction: 'forward' | 'backward' | 'start', 
+    transactionTime: number,
+    targetAddressSet: Set<string>,
+    requestAddressSet: Set<string>
+) {
+    console.log(`Processing address ${prevLvlAddress} | Depth: ${depth} | Direction: ${direction}`);
+    // We should process addresses from request list only on the first level
+    if (direction !== 'start' && requestAddressSet.has(prevLvlAddress)) {
+        console.log(`Address ${prevLvlAddress} is in the Bad list. Skipping...`);
+        return;
+    }
+
+    // This address already visited in the forward direction
+    if (direction === 'forward' && visitedForwardAddresses.has(prevLvlAddress)) {
+        console.log(`Address ${prevLvlAddress} already visited forward. Skipping...`);
+        return;
+    } else if (direction === 'backward' && visitedBackwardAddresses.has(prevLvlAddress)) {
+        console.log(`Address ${prevLvlAddress} already visited backward. Skipping...`);
+        return;
+    }
+
+    if (direction === 'forward') {
+        visitedForwardAddresses.add(prevLvlAddress);
+    } else if (direction === 'backward') {
+        visitedBackwardAddresses.add(prevLvlAddress);
+    }
+
+    // If we have transactions for this address in the cache, we use them
+    let result;
+    try{
+        result = await _getTransactions(prevLvlAddress, transactionCache);
+    }catch(e){
+        console.log(e);
+        if (direction === 'forward'){
+            visitedForwardAddresses.delete(prevLvlAddress);
+        } else if (direction === 'backward'){
+            visitedBackwardAddresses.delete(prevLvlAddress);
+        }
+        await processAddress(position, prevLvlAddress, depth, direction, transactionTime, targetAddressSet, requestAddressSet);
+    }
+        
+    if(!Array.isArray(result)) {
+        console.log(`Error fetching transactions for ${prevLvlAddress}. Retrying...`);
+        await processAddress(position, prevLvlAddress, depth, direction, transactionTime, targetAddressSet, requestAddressSet);
+        return;
+    }
+
+    const transactions = await _sortnfilterTransactions(result, transactionTime, direction);
+
+
+    for (const tx of transactions) {
+        console.log(`Processing txs`);
+        if (direction === 'forward' && Number(tx.transactionTime) <= transactionTime) {
+            console.log(`Transaction ${tx.txId} is older than the previous transaction. Direction ${direction}. Skipping...`);
+            continue;
+        } else if (direction === 'backward' && Number(tx.transactionTime) >= transactionTime) {
+            console.log(`Transaction ${tx.txId} is newer than the previous transaction. Direction ${direction}. Skipping...`);
+            continue;
+        }
+
+        totalTransactions++;
+
+        console.log(`Processing tx for ${prevLvlAddress} | Total: ${totalTransactions} | ${position} | Tuple length: ${txPath.length} | Depth: ${depth} | Bad txs: ${results.length} | ${direction} | ${tx.transactionTime}`);
+
+        await _prepareRecursion(prevLvlAddress, position, depth, direction, targetAddressSet, requestAddressSet, tx);
+    }
+}
+
+async function _prepareRecursion(prevLvlAddress: string, position: string, depth: number, dir: 'forward' | 'backward' | 'start', targetAddressSet: Set<string>, requestAddressSet: Set<string>, tx: ITransaction) {
+    // console.log(`Preparing recursion on depth: ${depth} | ${dir} | to: ${tx.to}, from: ${tx.from}`);
+
+    let nextHopDirection = dir;
+    if(dir === 'start'){
+        if(tx.to.includes(prevLvlAddress)){
+            nextHopDirection = 'backward';
+        } else if(tx.from.includes(prevLvlAddress)){
+            nextHopDirection = 'forward';
+        }
+    }
+
+    let uniqueAddresses: string[] = [];
+    if(nextHopDirection === 'forward'){
+        uniqueAddresses = Array.from(new Set(tx.to.split(',')));
+    } else if(nextHopDirection === 'backward'){
+        uniqueAddresses = Array.from(new Set(tx.from.split(',')));
+    }
+
+    txPath[depth] = tx;
+    
+    if (depth < MAX_DEPTH) {
+        for (let i = depth + 1; i <= MAX_DEPTH; i++) {
+            txPath[i] = null;
+        }
+    }
+
+    for (const addr of uniqueAddresses) {
+        if (targetAddressSet.has(addr)) {
+            results.push({ path: txPath });
+            console.log(`Bad transaction found for ${addr}: `, tx);
+            console.log(`Total bad transactions found: ${results.length}`);
+
+            saveStackToFile(txPath, mid_reports_directory);
+            continue;
+        }
+        if (depth < MAX_DEPTH) {
+            await processAddress(position, addr, depth + 1, nextHopDirection, Number(tx.transactionTime), targetAddressSet, requestAddressSet);
+        }
+    }
+}
+
+async function _getTransactions(address: string, transactionCache: Map<string, Set<ITransaction>>): Promise<ITransaction[]> {
+    if (transactionCache.has(address)) {
+        const txs = Array.from(transactionCache.get(address)!);
+        console.log(`Transactions for ${address} found in cache. Total: ${txs.length}`);
+        return txs;
+    } else {
+
+        let pages = 1;
+        let txs: ITransaction[] = [];
+        console.log("OkLink requesting...");
+        for(let i = 0; i <= pages; i++) {
+            console.log(`Requesting data for address: ${address} | Page: ${i + 1}`);
+
+            let response = await requestTxList_OkLink(address, i + 1);
+            if (response === null || response === undefined || response.code !== '0') {
+                throw new Error(`Error fetching transactions for ${address}: ${response.msg}`);
+            }
+
+            // if (Number(response.data[0].totalPage) > 10) {
+            //     console.log(`${address} is probably an exchange address. Skipping...`);
+            //     return;
+            // }
+            txs = txs.concat(response.data[0].transactionLists);
+            if(pages === 1) pages = Number(response.data[0].totalPage);
+        }
+        // console.log("Transaction list: ", txs.length);
+        transactionCache.set(address, new Set(txs));
+        // console.log("_getTransactions. Txs: ", txs.length);
+        return txs;
+    }
 }
 
 async function requestTxList_OkLink(address: string, page: number): Promise<IApiResponse> {
@@ -267,6 +268,12 @@ async function requestTxList_OkLink(address: string, page: number): Promise<IApi
         console.error(`Error fetching transactions for ${address}: `, error);
         return null;
     }
+}
+
+async function saveStackToFile(stack: ITransaction[], directory: string) {
+    const stackFilePath = path.join(directory, `stack_${Date.now()}.json`);
+    fs.writeFileSync(stackFilePath, JSON.stringify(stack, null, 2), 'utf-8');
+    console.log(`Stack saved to ${stackFilePath}`);
 }
 
 const readAddressesFromCsv = async (filePath: string): Promise<string[]> => {
