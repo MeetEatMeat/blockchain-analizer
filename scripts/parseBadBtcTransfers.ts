@@ -3,17 +3,9 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as csv from 'csv-parser';
-import { exit } from 'process';
-import { next } from 'cheerio/lib/api/traversing';
 dotenv.config();
 
-// const logFilePath = path.join(__dirname, '../outputs/console_output.log');
-// const logStream = fs.createWriteStream(logFilePath, { flags: 'a' });
-// console.log = (message) => {
-//     logStream.write(`${new Date().toISOString()} - ${message}\n`);
-// };
-
-interface Transaction {
+interface ITransaction {
     txId: string;
     methodId: string;
     blockHash: string;
@@ -33,19 +25,19 @@ interface Transaction {
     l1OriginHash: string;
 }
 
-interface TransactionList {
+interface ITransactionList {
     page: string;
     limit: string;
     totalPage: string;
     chainFullName: string;
     chainShortName: string;
-    transactionLists: Transaction[];
+    transactionLists: ITransaction[];
 }
 
-interface ApiResponse {
+interface IApiResponse {
     code: string;
     msg: string;
-    data: TransactionList[];
+    data: ITransactionList[];
 }
 
 type Result = { 
@@ -78,7 +70,7 @@ const final_report_path = path.join(reports_directory, 'bad_btc_txs_trace.json')
 const MAX_DEPTH = 2;
 
 async function getTransactionList() {
-    _checkDirectories();
+    await _checkDirectories();
 
     let targetAddresses: string[] = await _checkAddressList(target_list);
     let requestAddresses: string[] = await _checkAddressList(request_list);
@@ -86,11 +78,11 @@ async function getTransactionList() {
     const targetAddressSet = new Set(targetAddresses.map(addr => addr));
     const requestAddressSet = new Set(requestAddresses.map(addr => addr));
 
-    const transactionCache = new Map<string, Set<Transaction>>();
+    const transactionCache = new Map<string, Set<ITransaction>>();
     const results: Result[] = [];
     const visitedForwardAddresses = new Set<string>();
     const visitedBackwardAddresses = new Set<string>();
-    const txPath: Transaction[] = Array(MAX_DEPTH + 1).fill(null);
+    const txPath: ITransaction[] = Array(MAX_DEPTH + 1).fill(null);
     let totalTransactions = 0;
     let position = '';
 
@@ -98,7 +90,6 @@ async function getTransactionList() {
     // MAIN LOOP
     ////////////////////
     for (let i = 0; i < requestAddresses.length; i++) {
-        // console.log(`Processing address ${requestAddresses[i]}`);
         position = `Current position: ${i + 1}/${requestAddresses.length}`;
         await processAddress(position, requestAddresses[i], 0, 'start', 0);
     }
@@ -139,12 +130,11 @@ async function getTransactionList() {
             await processAddress(position, prevLvlAddress, depth, direction, transactionTime);
             return;
         }
-        // console.log("Transactions before: ", result.length);
+
         const transactions = await _sortnfilterTransactions(result, transactionTime, direction);
-        // console.log("Transactions after: ", transactions.length);
+
     
         for (const tx of transactions) {
-            // await new Promise(resolve => setTimeout(resolve, 1000));
             console.log(`Processing txs`);
             if (direction === 'forward' && Number(tx.transactionTime) <= transactionTime) {
                 console.log(`Transaction ${tx.txId} is older than the previous transaction. Direction ${direction}. Skipping...`);
@@ -161,7 +151,7 @@ async function getTransactionList() {
             await _prepareRecursion(direction, tx);
         }
 
-        async function _getTransactions(address: string): Promise<Transaction[]> {
+        async function _getTransactions(address: string, transactionCache: Map<string, Set<ITransaction>>): Promise<ITransaction[]> {
             if (transactionCache.has(address)) {
                 // console.log("_getTransactions. First if");
                 const txs = Array.from(transactionCache.get(address)!);
@@ -170,7 +160,7 @@ async function getTransactionList() {
             } else {
                 // console.log("_getTransactions. Second if");
                 let pages = 1;
-                let txs: Transaction[] = [];
+                let txs: ITransaction[] = [];
                 console.log("OkLink requesting...");
                 for(let i = 0; i <= pages; i++) {
                     // await new Promise(resolve => setTimeout(resolve, 1000));
@@ -200,11 +190,11 @@ async function getTransactionList() {
             }
         }
 
-        async function _prepareRecursion(dir: 'forward' | 'backward' | 'start', tx: Transaction) {
+        async function _prepareRecursion(dir: 'forward' | 'backward' | 'start', tx: ITransaction) {
             // console.log(`Preparing recursion on depth: ${depth} | ${dir} | to: ${tx.to}, from: ${tx.from}`);
 
             let nextHopDirection = dir;
-            if(direction === 'start'){
+            if(dir === 'start'){
                 if(tx.to.includes(prevLvlAddress)){
                     nextHopDirection = 'backward';
                 } else if(tx.from.includes(prevLvlAddress)){
@@ -218,17 +208,16 @@ async function getTransactionList() {
             } else if(nextHopDirection === 'backward'){
                 uniqueAddresses = Array.from(new Set(tx.from.split(',')));
             }
-        
-            for (const addr of uniqueAddresses) {
-                txPath[depth] = tx;
-            
-                if (depth < MAX_DEPTH) {
-                    for (let i = depth + 1; i <= MAX_DEPTH; i++) {
-                        txPath[i] = null;
-                    }
-                }
-                // console.log(`txPath on depth ${depth}:`, txPath);
 
+            txPath[depth] = tx;
+            
+            if (depth < MAX_DEPTH) {
+                for (let i = depth + 1; i <= MAX_DEPTH; i++) {
+                    txPath[i] = null;
+                }
+            }
+
+            for (const addr of uniqueAddresses) {
                 if (targetAddressSet.has(addr)) {
                     results.push({ path: txPath });
                     console.log(`Bad transaction found for ${addr}: `, tx);
@@ -244,7 +233,7 @@ async function getTransactionList() {
         }
     }
 
-    async function saveStackToFile(stack: Transaction[], directory: string) {
+    async function saveStackToFile(stack: ITransaction[], directory: string) {
         const stackFilePath = path.join(directory, `stack_${Date.now()}.json`);
         fs.writeFileSync(stackFilePath, JSON.stringify(stack, null, 2), 'utf-8');
         console.log(`Stack saved to ${stackFilePath}`);
@@ -253,7 +242,7 @@ async function getTransactionList() {
     _finalizeResults(totalTransactions, position, results);
 }
 
-async function requestTxList_OkLink(address: string, page: number): Promise<ApiResponse> {
+async function requestTxList_OkLink(address: string, page: number): Promise<IApiResponse> {
     const apikey = process.env.OKLINK_API_KEY;
     if (!apikey) {
         console.error('requestTxList_OkLink. API Key not found');
@@ -261,7 +250,7 @@ async function requestTxList_OkLink(address: string, page: number): Promise<ApiR
     }
 
     try {
-        const response = await axios.get<ApiResponse>('https://www.oklink.com/api/v5/explorer/address/transaction-list', {
+        const response = await axios.get<IApiResponse>('https://www.oklink.com/api/v5/explorer/address/transaction-list', {
             params: {
                 chainShortName: 'btc',
                 address: address,
@@ -317,7 +306,7 @@ async function _checkAddressList(path: string): Promise<string[]> {
     }
 }
 
-async function _finalizeResults(totalTransactions: number, position: string, results: any[]){
+async function _finalizeResults(totalTransactions: number, position: string, results: Result[]){
     const report = {
         total: totalTransactions,
         position: position,
@@ -328,7 +317,7 @@ async function _finalizeResults(totalTransactions: number, position: string, res
     console.log(`All transactions saved to ${final_report_path}`);
 }
 
-async function _sortnfilterTransactions(transactions: Transaction[], transactionTime: number, direction: 'forward' | 'backward' | 'start'): Promise<Transaction[]> {
+async function _sortnfilterTransactions(transactions: ITransaction[], transactionTime: number, direction: 'forward' | 'backward' | 'start'): Promise<ITransaction[]> {
     if (direction === 'start') {
         return transactions;
     }
