@@ -1,3 +1,81 @@
+/**
+ * ### Overview
+
+This TypeScript-based code is designed to perform an analysis of blockchain transactions for a given set of addresses. 
+The primary goal is to identify and trace specific transactions across a maximum depth of 2 hops. The code interacts 
+with multiple APIs, including OKLink's blockchain explorer API, to retrieve transaction data, process it, and save the 
+results into CSV files and JSON reports. It also interacts with a local SQLite database to fetch additional information 
+about the addresses involved.
+
+### Key Features
+
+1. **API Integration**: The script interacts with the OKLink API to fetch transaction data and address information.
+2. **Recursive Transaction Analysis**: It processes transactions recursively up to a specified depth, looking for particular 
+patterns or conditions.
+3. **Caching and Optimization**: Transaction data is cached in memory to reduce redundant API calls.
+4. **CSV and JSON Output**: Results are saved in CSV files for easy inspection and in JSON format for comprehensive reporting.
+5. **Database Integration**: The script connects to a local SQLite database to retrieve additional metadata (labels) associated 
+with blockchain addresses.
+6. **Error Handling and Retry Logic**: The script includes robust error handling, including retry mechanisms for failed API 
+requests.
+
+### How It Works
+
+1. **Initial Setup**:
+   - Load environment variables using `dotenv`.
+   - Define interfaces to structure the data received from APIs and the SQLite database.
+   - Initialize directories and variables required for processing.
+
+2. **Main Processing Loop** (`getTransactionList` function):
+   - Reads a list of addresses from a CSV file.
+   - For each address, it calls `_processAddress` to start analyzing transactions associated with it.
+
+3. **Transaction Processing** (`_processAddress` and `_processOperations` functions):
+   - For each address, transactions are fetched using `_getTransactions`, which retrieves data from the OKLink API.
+   - Transactions are sorted and filtered based on specific criteria (e.g., timestamp, amount).
+   - Each transaction is analyzed, and if it meets the conditions, the script proceeds to the next level of depth, recursively.
+
+4. **Data Output** (`_saveStackToFile` function):
+   - Transactions and their metadata are saved into a CSV file in a structured format.
+   - If a "bad" transaction (as defined by the criteria) is found, it is also logged into a JSON file.
+
+5. **Database Interaction** (`_getLabelFromDB` function):
+   - The script connects to an SQLite database to retrieve labels associated with blockchain addresses.
+   - This data is used to enrich the transaction analysis, adding more context to each transaction.
+
+### Instructions
+
+1. **Prerequisites**:
+   - Node.js and npm should be installed on your machine.
+   - Ensure that the OKLink API key is stored in an `.env` file with the key `OKLINK_API_KEY`.
+
+2. **Setup**:
+   - Place your input CSV file containing addresses in the `inputs/charles_case/` directory.
+   - Ensure that your SQLite database (`db.sqlite3`) is correctly located as per the path specified in the script.
+   - Create the required output directories if they do not exist (`outputs/charles_case/first_list_reports`).
+
+3. **Running the Script**:
+   - Run the script using Node.js: `node your_script_file.js`.
+   - The script will process the addresses, perform the transaction analysis, and save the results in the specified output 
+   directory.
+
+4. **Output**:
+   - The main outputs are a CSV file (`mid_token20_report.csv`) and a JSON report (`bad_soursing_token20_trace.json`).
+   - The CSV contains a detailed log of transactions analyzed.
+   - The JSON report provides a summary of all "bad" transactions found during the analysis.
+
+5. **Customizing**:
+   - You can modify the `MAX_DEPTH` variable to change how deep the analysis goes in tracing transactions.
+   - The script is also designed to be modular, so additional processing logic or output formats can be added with relative ease.
+
+### Summary
+
+This script is a powerful tool for tracing and analyzing blockchain transactions for specific addresses. It efficiently handles 
+large datasets, leverages caching for performance, and outputs data in both human-readable (CSV) and machine-readable (JSON) 
+formats. By integrating with both a blockchain explorer API and a local SQLite database, it provides a comprehensive and 
+contextual analysis of blockchain activities.
+ */
+
 import axios from 'axios';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
@@ -5,7 +83,6 @@ import * as fs from 'fs';
 import { createObjectCsvWriter } from 'csv-writer';
 import * as csv from 'csv-parser';
 import { verbose } from "sqlite3";
-import { count } from 'console';
 const sqlite3 = verbose();
 dotenv.config();
 
@@ -99,41 +176,51 @@ interface IAddressInfo {
     isAaAddress: boolean;
 }
 
-
 type Result = { 
     path: any[]
 }
 
-/*
-This script uses the `processAddress()` function to take addresses from the `requestAddresses` array, 
-which is a list of sanctioned addresses, and requests transactions for each address in the list. 
-The `processAddress()` function then takes the first transaction, checks whether it was incoming or outgoing, 
-and recursively calls itself to request transactions from the address that was either the sender or the recipient, 
-depending on the direction, while preserving the direction.
-
-For each transaction, the sender's or recipient's address is checked against the `csvAddresses` list, 
-which is a list of Bitkub exchange addresses. At each level of recursion, 
-the current transaction is stored in the `txPath` tuple at the position determined by the `depth` variable, 
-which increments by 1 with each recursive call. This way, for each current transaction, 
-the `txPath` variable stores the entire path leading up to it.
-
-If an address from the `csvAddresses` list is found in the `to` or `from` field of the current transaction, 
-the entire path—the entire chain of transactions stored in the `txPath` variable—is saved in the `results` variable, 
-and the function returns to the previous recursion level. The next transaction is then examined.
-*/
-
+/**
+ * Location parameters
+ * @param request_list - path to the CSV file containing addresses to process
+ * @param reports_directory - path to the directory where reports will be saved
+ * @param mid_reports_directory - path to the directory where intermediate reports will be saved
+ * @param final_report_path - path to the final JSON report file
+ */
 const request_list = path.join(__dirname, '../inputs/charles_case/first_list.csv');
 const reports_directory = path.join(__dirname, '../outputs/charles_case/first_list_reports');
 const mid_reports_directory = path.join(reports_directory, './mid_reports');
 const final_report_path = path.join(reports_directory, 'bad_soursing_token20_trace.json');
+
+/**
+ * Main parameters
+ * @param MAX_DEPTH - maximum depth of transaction tracing
+ * @param maxRetries - maximum number of retries for API requests
+ * @param minimumAmount - minimum amount of transaction to consider. We use it to cut off dust transactions
+ * @param transfersMaxPerAddress - maximum number of transactions per address to consider. We use it to cut off cex wallets or mev bots
+ * @param excludeContracts - flag to exclude contract addresses from the analysis. It useful to cut off tokens itself
+ */
 const MAX_DEPTH = 2;
+const maxRetries = 5;
+const minimumAmount = 1;
+const transfersMaxPerAddress = 1000;
+const excludeContracts = true;
+
+/**
+ * @param txPath - array to store transaction paths. It results in the middle and final reports
+ * @param results - stores found pathes
+ * @param transactionCache - cache for transactions
+ * @param visitedAddresses - set of visited addresses
+ * @param visitedTransactions - set of visited transactions
+ * @param totalTransactions - total number of processed transactions
+ */
 const txPath: any[] = Array(MAX_DEPTH + 1).fill(null);
 const results: Result[] = [];
 const transactionCache = new Map<string, Set<ITransfer>>();
 const visitedAddresses = new Set<string>();
 const visitedTransactions = new Set<string>();
-const maxRetries = 5;
 let totalTransactions = 0;
+let position = '';
 
 async function getTransactionList() {
     await _checkDirectories();
@@ -141,21 +228,18 @@ async function getTransactionList() {
     let requestAddresses: string[] = await _checkAddressList(request_list);
     const requestAddressSet = new Set(requestAddresses.map(addr => addr.toLowerCase()));
 
-    let position = '';
-
     ////////////////////
     // MAIN LOOP
     ////////////////////
     for (let i = 0; i < requestAddresses.length; i++) {
         position = `Current position: ${i + 1}/${requestAddresses.length}`;
-        await _processAddress(position, requestAddresses[i].toLowerCase(), 0, 0, '', requestAddressSet);
+        await _processAddress(requestAddresses[i].toLowerCase(), 0, 0, '', requestAddressSet);
     }
 
     await _finalizeResults(totalTransactions, position, results);
 }
 
 async function _processAddress(
-    position: string, 
     prevLvlAddress: string, 
     depth: number,
     timestamp: number,
@@ -204,7 +288,7 @@ async function _processOperations(
             continue;
         }
 
-        if(Number(tx.amount) < 1){
+        if(Number(tx.amount) < minimumAmount){
             console.log(`Transaction ${tx.txId} is less than 1. Skipping...`);
             continue;
         }
@@ -218,7 +302,7 @@ async function _processOperations(
 
         totalTransactions++;
         console.log(`Processing transaction for ${address} | Total: ${totalTransactions} | ${position} | Tuple length: ${txPath.length} | Depth: ${depth} | Bad txs: ${results.length} | ${tx.transactionTime}`);
-        await _prepareRecursion(position, address, depth, tx, symbol, requestAddressSet);
+        await _prepareRecursion(address, depth, tx, symbol, requestAddressSet);
     }
 }
 
@@ -241,7 +325,6 @@ async function _processTransactions(address: string, timestamp: number): Promise
 }
 
 async function _prepareRecursion(
-    position: string,
     prevLvlAddress: string, 
     depth: number, 
     tx: ITransfer,
@@ -265,8 +348,9 @@ async function _prepareRecursion(
     const nextHopDepth = depth + 1;
     const nextHopSymbol = symbol === '' ? tx.symbol : symbol;
     const attribution = await _getLabelFromDB(nextHopAddress);
-    if(depth > 0){
-        if (attribution !== null){
+
+    if (depth > 0) {
+        if (attribution !== null) {
             results.push({ path: txPath });
             console.log(`Bad transaction found for ${prevLvlAddress}: `, tx, attribution);
             console.log(`Total bad transactions found: ${results.length}`);
@@ -276,17 +360,20 @@ async function _prepareRecursion(
         }
     }
 
-    if (depth < MAX_DEPTH && attribution === null && countOfTransactions < 1000 && isNotContract) {
-        await _processAddress(position, nextHopAddress, nextHopDepth, Number(tx.transactionTime), nextHopSymbol, requestAddressSet);
+    const shouldProcessNextHop = depth < MAX_DEPTH && attribution === null && countOfTransactions < transfersMaxPerAddress;
+    
+    if (shouldProcessNextHop && (!excludeContracts || (excludeContracts && isNotContract))) {
+        await _processAddress(nextHopAddress, nextHopDepth, Number(tx.transactionTime), nextHopSymbol, requestAddressSet);
     }
 }
 
-// async function _saveStackToFile(stack: ITransaction[], attribution: Label, directory: string) {
-//     const stackWithAttribution = [...stack, attribution];
-//     const stackFilePath = path.join(directory, `stack_${Date.now()}.json`);
-//     fs.writeFileSync(stackFilePath, JSON.stringify(stackWithAttribution, null, 2), 'utf-8');
-//     console.log(`Stack saved to ${stackFilePath}`);
-// }
+async function _saveStack(stack: ITransfer[], attribution: Label, directory: string) {
+    const stackWithAttribution = [...stack, attribution];
+    const stackFilePath = path.join(directory, `stack_${Date.now()}.json`);
+    fs.writeFileSync(stackFilePath, JSON.stringify(stackWithAttribution, null, 2), 'utf-8');
+    console.log(`Stack saved to ${stackFilePath}`);
+}
+
 async function _saveStackToFile(stack: ITransfer[], attribution: Label, directory: string) {
     const records = [];
     const csvWriter = createObjectCsvWriter({
